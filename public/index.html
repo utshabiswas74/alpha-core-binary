@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ALPHA CORE // V3.0</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="main-layout">
+        
+        <aside class="left-panel">
+            
+            <div class="module-box header-module">
+                <div class="brand">
+                    <h1>ALPHA CORE <span class="version">V3.0</span></h1>
+                    <div class="sub-text">NEURAL TRADING SYSTEM</div>
+                </div>
+                
+                <div class="header-right">
+                    <div class="status-badge" id="connectionStatus">OFFLINE</div>
+                </div>
+            </div>
+
+            <div class="scrollable-content">
+                
+                <div class="module-box stats-module">
+                    <div class="module-header">PORTFOLIO METRICS</div>
+                    
+                    <div class="grid-stats">
+                        <div class="data-card cyan">
+                            <h3>BALANCE</h3>
+                            <div class="value text-cyan" id="ui-balance">$0.00</div>
+                            <div class="bar-deco cyan-bar"></div>
+                        </div>
+
+                        <div class="data-card green">
+                            <h3>PROFIT (SESSION)</h3>
+                            <div class="value text-green" id="ui-pnl">$0.00</div>
+                            <div class="bar-deco green-bar"></div>
+                        </div>
+
+                        <div class="data-card yellow">
+                            <h3>ACCURACY</h3>
+                            <div class="value text-yellow" id="ui-accuracy">0/0</div>
+                            <div class="bar-deco yellow-bar"></div>
+                        </div>
+
+                        <div class="data-card red">
+                            <h3>STATS (SESSION)</h3>
+                            <div class="value text-red" id="ui-win">0/0</div>
+                            <div class="bar-deco red-bar"></div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="simple-footer sticky-footer">
+                <button id="btnMainAction" class="btn-tech start" onclick="toggleTrading()">
+                    <svg class="btn-svg" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg> START TRADING
+                </button>
+            </div>
+
+        </aside>
+
+        <main class="right-panel">
+            <div class="terminal-window">
+                <div class="terminal-header">
+                    <div class="header-left">
+                        <div class="terminal-title">
+                            <span class="dot pulse"></span> SYSTEM_LOGS & SIGNALS
+                        </div>
+                    </div>
+                    
+                    <div class="terminal-controls">
+                        <div class="live-price-container">
+                            <span class="price-label">LIVE PRICE:</span>
+                            <span class="price-value" id="ui-live-price">---</span>
+                        </div>
+                    </div>
+
+                </div>
+                
+                <div class="terminal-body" id="logBox">
+                    <div class="log-line sys">>>> Alpha Core V3.0 Initialized &lt&lt&lt</div>
+                </div>
+            </div>
+        </main>
+
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+
+        let isTradingActive = false; 
+        let lastPrice = 0;
+
+        const logBox = document.getElementById('logBox');
+        const statusBadge = document.getElementById('connectionStatus');
+        const btnMainAction = document.getElementById('btnMainAction');
+        const elLivePrice = document.getElementById('ui-live-price');
+        
+        const elBalance = document.getElementById('ui-balance');
+        const elPnl = document.getElementById('ui-pnl');
+        const elAccuracy = document.getElementById('ui-accuracy');
+        const elWinRate = document.getElementById('ui-win'); 
+
+        ipcRenderer.send('bot-command', 'start'); 
+
+        const iconPlay = `<svg class="btn-svg" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>`;
+        const iconPause = `<svg class="btn-svg" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`;
+
+        function updateButtonState() {
+            if (isTradingActive) {
+                btnMainAction.innerHTML = `${iconPause} STOP TRADING`;
+                btnMainAction.className = "btn-tech stop";
+            } else {
+                btnMainAction.innerHTML = `${iconPlay} START TRADING`;
+                btnMainAction.className = "btn-tech start";
+            }
+        }
+
+        function toggleTrading() {
+            isTradingActive = !isTradingActive;
+            ipcRenderer.send('toggle-trading-logic', isTradingActive);
+            
+            if(isTradingActive) log("TRADING ENABLED. AI logic activating...", "sysAck");
+            else log("TRADING PAUSED. AI logic cancelling...", "sys");
+            
+            updateButtonState();
+        }
+
+        function log(msg, type = 'term-green') {
+            const div = document.createElement('div');
+            
+            if(msg.includes('ENABLED') || msg.includes('[RISK]') || msg.includes('Auto-Pause') || msg.includes('[BOT]') || msg.includes('ENTRY')) {
+                type = 'sysAck'; 
+            }
+            else if(msg.includes('WIN') || msg.includes('PROFIT')) {
+                type = 'term-green'; 
+            }
+            else if(msg.includes('LOSS') || msg.includes('ERROR') || msg.includes('ALERT')) {
+                type = 'text-red'; 
+            }
+            else if(msg.includes('[FILTER]') || msg.includes('[INIT]') || msg.includes('PAUSED')) {
+                type = 'sys'; 
+            }
+            else if(msg.includes('[DERIV]') || msg.includes('BUY') || msg.includes('SELL')) {
+                type = 'term-green'; 
+            }
+
+            div.className = `log-line ${type}`; 
+            const time = new Date().toLocaleTimeString('en-US', {hour12: false});
+            div.innerHTML = `<span class="log-time">[${time}]</span> ${msg}`;
+            
+            logBox.appendChild(div);
+            
+            requestAnimationFrame(() => logBox.scrollTop = logBox.scrollHeight);
+            if (logBox.children.length > 128) logBox.removeChild(logBox.firstChild);
+        }
+
+        ipcRenderer.on('sys_log', (event, data) => log(data.msg, 'sys'));
+        ipcRenderer.on('bot-log', (event, message) => log(message)); 
+
+        ipcRenderer.on('bot-status', (event, status) => {
+            if(status === 'running') {
+                statusBadge.innerText = "ONLINE";
+                statusBadge.classList.add('online');
+            } else {
+                statusBadge.innerText = "OFFLINE";
+                statusBadge.classList.remove('online');
+            }
+        });
+
+        ipcRenderer.on('price-update', (event, currentPrice) => {
+            const price = parseFloat(currentPrice);
+            if (price > lastPrice) {
+                elLivePrice.classList.remove('price-down');
+                elLivePrice.classList.add('price-up');
+            } else if (price < lastPrice) {
+                elLivePrice.classList.remove('price-up');
+                elLivePrice.classList.add('price-down');
+            }
+            elLivePrice.innerText = price.toFixed(2);
+            lastPrice = price;
+        });
+
+        ipcRenderer.on('bot-data-update', (event, data) => {
+            if(data.balance) elBalance.innerText = `$${data.balance}`;
+            
+            if(data.accuracy !== undefined) {
+                elAccuracy.innerText = data.accuracy;
+            }
+            
+            if(data.winRate !== undefined) {
+                elWinRate.innerText = data.winRate;
+            }
+
+            if(data.pnl !== undefined) {
+                const val = parseFloat(data.pnl);
+                const absVal = Math.abs(val).toFixed(2);
+                
+                if(val >= 0) {
+                    elPnl.innerText = `$${absVal} (+)`;
+                    elPnl.className = "value text-green";
+                } else {
+                    elPnl.innerText = `$${absVal} (-)`;
+                    elPnl.className = "value text-red";
+                }
+            }
+        });
+
+
+        ipcRenderer.on('stop-triggered', (event, triggered) => {
+            if(triggered) {
+                isTradingActive = false;
+                updateButtonState();
+            }
+        });
+
+    </script>
+</body>
+</html>

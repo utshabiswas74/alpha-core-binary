@@ -1,0 +1,332 @@
+:root {
+    /* বেস কালার প্যালেট */
+    --bg-dark: #050608;
+    --panel-bg: rgba(13, 15, 20, 0.95);
+    --module-bg: rgba(20, 22, 28, 0.85);
+    
+    /* বর্ডার কালার */
+    --border-primary: #2d3748;
+    --border-highlight: rgba(0, 243, 255, 0.3);
+    
+    /* থিম কালারসমূহ (নিয়ন ইফেক্ট) */
+    --cyan: #00f3ff;
+    --red: #ff0055;   /* পিঙ্কিশ রেড (স্টপ বাটন ও এরর এর জন্য) */
+    --green: #00ff9d; /* ব্রাইট গ্রিন (প্রফিট ও উইন এর জন্য) */
+    --yellow: #ffcc00;
+    --blue: #2979ff; 
+    --term-green: #2ecc71; 
+    
+    /* টেক্সট কালার */
+    --text-muted: #6b7c93;
+    --text-bright: #e2e8f0;
+    
+    /* ফন্ট ফ্যামিলি */
+    --font-head: 'Rajdhani', sans-serif;
+    --font-code: 'JetBrains Mono', monospace;
+}
+
+/* বেসিক রিসেট */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    background-color: var(--bg-dark); 
+    color: var(--text-bright); 
+    font-family: var(--font-head);
+    height: 100vh; 
+    overflow: hidden;
+    
+    /* সাইবারপাঙ্ক ব্যাকগ্রাউন্ড গ্রেডিয়েন্ট */
+    background-image: radial-gradient(circle at 20% 30%, rgba(0, 243, 255, 0.04) 0%, transparent 50%),
+                      radial-gradient(circle at 80% 70%, rgba(255, 0, 85, 0.04) 0%, transparent 50%),
+                      linear-gradient(to bottom, #050608 0%, #0d0f14 100%);
+    
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    padding: 20px;
+}
+
+/* মেইন লেআউট গ্রিড */
+.main-layout { 
+    display: grid; 
+    grid-template-columns: 380px 1fr; /* বামে ৩৮০ পিক্সেল, ডানে বাকিটা */
+    gap: 20px; 
+    width: 100%; 
+    max-width: 1600px; 
+    height: calc(100vh - 40px); 
+}
+
+/* --- MODULE BOX STYLES (বক্স ডিজাইন) --- */
+.module-box {
+    background: var(--module-bg); 
+    border: 1px solid var(--border-primary);
+    border-top: 2px solid var(--border-highlight); 
+    padding: 20px; 
+    margin-bottom: 20px;
+    position: relative; 
+    box-shadow: 0 5px 20px rgba(0,0,0,0.4); 
+    backdrop-filter: blur(5px);
+}
+
+/* কোণায় ছোট সাইবারপাঙ্ক দাগ (Decoration) */
+.module-box::before { content: ''; position: absolute; top: -2px; left: -2px; width: 8px; height: 8px; border-top: 2px solid var(--cyan); border-left: 2px solid var(--cyan); }
+.module-box::after { content: ''; position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px; border-bottom: 2px solid var(--cyan); border-right: 2px solid var(--cyan); }
+
+.module-header { 
+    font-family: var(--font-code); 
+    font-size: 0.75rem; 
+    color: var(--cyan); 
+    letter-spacing: 2px; 
+    margin-bottom: 15px; 
+    padding-bottom: 8px; 
+    border-bottom: 1px solid rgba(0, 243, 255, 0.1); 
+    text-transform: uppercase; 
+    opacity: 0.9; 
+    font-weight: bold;
+}
+
+/* --- LEFT PANEL --- */
+.left-panel { 
+    display: flex; 
+    flex-direction: column; 
+    height: 100%; 
+    overflow: hidden; 
+    padding-right: 5px; 
+}
+
+.scrollable-content { 
+    flex-grow: 1; 
+    overflow-y: auto; 
+    min-height: 0; 
+    margin-bottom: 15px; 
+    padding-right: 5px; 
+}
+
+/* কাস্টম স্ক্রলবার */
+.scrollable-content::-webkit-scrollbar { width: 4px; }
+.scrollable-content::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+
+/* Header & Status */
+.header-module { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    border-top-color: var(--cyan); 
+    flex-shrink: 0; 
+}
+
+.brand h1 { 
+    font-weight: 700; 
+    font-size: 1.6rem; 
+    letter-spacing: 1px; 
+    background: linear-gradient(90deg, #fff, var(--text-muted)); 
+    -webkit-background-clip: text; 
+    -webkit-text-fill-color: transparent; 
+}
+.version { color: var(--cyan); font-size: 0.8rem; vertical-align: top; }
+.sub-text { font-family: var(--font-code); font-size: 0.65rem; color: var(--text-muted); letter-spacing: 2px; margin-top: 2px; }
+
+/* Header Right Side (Status Badge) */
+.header-right { display: flex; align-items: center; gap: 10px; }
+
+.status-badge { 
+    font-family: var(--font-code); 
+    font-size: 0.75rem; 
+    padding: 5px 10px; 
+    background: #111; 
+    color: var(--red); 
+    border: 1px solid var(--border-primary); 
+    box-shadow: 0 0 5px rgba(255, 0, 85, 0.1); 
+    text-transform: uppercase; 
+    transition: 0.3s; 
+}
+.status-badge.online { 
+    color: var(--green); 
+    border-color: var(--green); 
+    box-shadow: 0 0 15px rgba(0, 255, 157, 0.2); 
+    background: rgba(0, 255, 157, 0.05); 
+}
+
+/* --- STATS GRID (ডাটা কার্ড ডিজাইন) --- */
+.grid-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+.data-card { 
+    background: rgba(255,255,255,0.02); 
+    padding: 12px; 
+    position: relative; 
+    border-left: 3px solid var(--border-primary); 
+    overflow: hidden; 
+}
+.data-card h3 { 
+    font-family: var(--font-code); 
+    font-size: 0.65rem; 
+    color: var(--text-muted); 
+    margin-bottom: 4px; 
+    text-transform: uppercase; 
+}
+.data-card .value { font-size: 1.4rem; font-weight: 700; letter-spacing: 1px; }
+
+/* ডেকোরেটিভ বার */
+.bar-deco { position: absolute; bottom: 0; left: 0; height: 2px; width: 100%; opacity: 0.6; }
+
+/* কালার ভেরিয়েশন */
+.data-card.red { border-left-color: var(--red); } .red-bar { background: var(--red); }
+.data-card.cyan { border-left-color: var(--cyan); } .cyan-bar { background: var(--cyan); }
+.data-card.yellow { border-left-color: var(--yellow); } .yellow-bar { background: var(--yellow); }
+.data-card.green { border-left-color: var(--green); } .green-bar { background: var(--green); }
+
+/* টেক্সট কালার ক্লাস */
+.text-cyan { color: var(--cyan); }
+.text-red { color: var(--red); }
+.text-green { color: var(--green); }
+.text-yellow { color: var(--yellow); }
+
+/* --- FOOTER & BUTTONS --- */
+.sticky-footer { flex-shrink: 0; margin-top: auto; }
+
+.simple-footer {
+    margin-top: auto;
+    padding-top: 15px;
+    border-top: 1px solid rgba(0, 243, 255, 0.2);
+    display: flex;
+    flex-direction: column;
+}
+
+.btn-tech { 
+    width: 100%; 
+    padding: 16px; 
+    border: none; 
+    font-family: var(--font-head); 
+    font-size: 1rem; 
+    font-weight: 700; 
+    letter-spacing: 2px; 
+    cursor: pointer; 
+    position: relative; 
+    overflow: hidden; 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    transition: all 0.2s; 
+    /* বাটনের কোণা কাটার ডিজাইন */
+    clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px); 
+}
+
+.btn-svg { 
+    width: 14px; 
+    height: 14px; 
+    margin-right: 10px; 
+    fill: currentColor; 
+    display: inline-block;
+    vertical-align: middle;
+}
+
+/* Start Button Style */
+.btn-tech.start { background: rgba(0, 243, 255, 0.08); color: var(--cyan); border: 1px solid var(--cyan); }
+.btn-tech.start:hover { background: var(--cyan); color: #000; box-shadow: 0 0 25px rgba(0, 243, 255, 0.4); }
+
+/* Stop Button Style */
+.btn-tech.stop { 
+    background: rgba(255, 0, 85, 0.1); 
+    color: var(--red); 
+    border: 1px solid rgba(255, 0, 85, 0.5); 
+    box-shadow: 0 0 10px rgba(255, 0, 85, 0.15); 
+}
+.btn-tech.stop:hover { 
+    background: var(--red); 
+    color: #fff; 
+    border-color: var(--red);
+    box-shadow: 0 0 25px rgba(255, 0, 85, 0.6); 
+}
+
+/* --- RIGHT PANEL (TERMINAL) --- */
+.right-panel { flex-grow: 1; display: flex; height: 100%; min-height: 0; }
+
+.terminal-window { 
+    width: 100%; 
+    height: 100%; 
+    background: #08090c; 
+    border: 1px solid var(--border-primary); 
+    display: flex; 
+    flex-direction: column; 
+    box-shadow: 0 0 40px rgba(0,0,0,0.6); 
+    position: relative; 
+    overflow: hidden; 
+    min-height: 0; 
+}
+
+/* টার্মিনাল গ্রিড ব্যাকগ্রাউন্ড */
+.terminal-window::before { 
+    content: ''; 
+    position: absolute; 
+    top: 0; 
+    left: 0; 
+    width: 100%; 
+    height: 100%; 
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,0.1) 0px, rgba(0,0,0,0.1) 1px, transparent 1px, transparent 4px); 
+    pointer-events: none; 
+    z-index: 5; 
+    opacity: 0.6; 
+}
+
+.terminal-header { 
+    background: #11131a; 
+    padding: 10px 18px; 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    border-bottom: 1px solid var(--border-primary); 
+    flex-shrink: 0; 
+}
+
+.terminal-title { font-family: var(--font-code); font-size: 0.85rem; color: var(--text-bright); display: flex; align-items: center; }
+.dot { width: 8px; height: 8px; background: var(--green); border-radius: 50%; margin-right: 10px; box-shadow: 0 0 8px var(--green); }
+.pulse { animation: pulse 2s infinite; }
+
+.terminal-body { 
+    flex-grow: 1; 
+    padding: 15px 20px; 
+    overflow-y: auto; 
+    font-family: var(--font-code); 
+    font-size: 0.9rem; 
+    line-height: 1.5; 
+    color: #a0aec0; 
+    z-index: 1; 
+    display: block; 
+    min-height: 0; 
+    scroll-behavior: smooth; 
+}
+
+/* লগ স্ক্রলবার */
+.terminal-body::-webkit-scrollbar { width: 6px; }
+.terminal-body::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+
+/* Log Line Styles */
+.log-line { border-bottom: 1px solid rgba(255,255,255,0.02); padding: 3px 0; display: block; animation: fadeIn 0.1s ease-out; }
+.log-time { color: #555; margin-right: 12px; font-size: 0.75rem; user-select: none; }
+.log-line.term-green { color: var(--term-green); text-shadow: 0 0 5px rgba(46, 204, 113, 0.3); }
+.log-line.sys { color: var(--yellow); }
+.log-line.sysAck { color: var(--cyan); border-left: 2px solid var(--cyan); padding-left: 8px; }
+.log-line.err { color: var(--red); }
+.log-line.text-green { color: var(--green); }
+.log-line.text-red { color: var(--red); }
+
+/* Live Price Ticker */
+.live-price-container {
+    font-family: 'JetBrains Mono', monospace; 
+    font-size: 0.9rem;
+    display: flex; 
+    align-items: center; 
+    gap: 8px;
+    background: rgba(0, 243, 255, 0.05); 
+    padding: 4px 10px;
+    border: 1px solid rgba(0, 243, 255, 0.2); 
+    border-radius: 4px;
+}
+.price-label { color: var(--text-muted); font-size: 0.75rem; font-weight: bold; }
+.price-value { color: #fff; font-weight: 700; letter-spacing: 1px; }
+.price-up { color: var(--green); }
+.price-down { color: var(--red); }
+
+/* অ্যানিমেশন */
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pulse { 0% { opacity: 1; box-shadow: 0 0 0 0 rgba(0, 255, 157, 0.7); } 70% { opacity: 1; box-shadow: 0 0 0 10px rgba(0, 255, 157, 0); } 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(0, 255, 157, 0); } }

@@ -1,0 +1,60 @@
+{
+  "name": "alpha-core",
+  "version": "3.0.0",
+  "description": "Alpha Core Neural Trading Framework",
+  "main": "main.js",
+  "author": "PiePre Tech",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder",
+    "pack": "electron-builder --dir"
+  },
+  "devDependencies": {
+    "electron": "25.9.8",
+    "electron-builder": "24.13.3"
+  },
+  "build": {
+    "appId": "com.piepretech.alphacore",
+    "productName": "Alpha Core",
+    "asar": true,
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "public/icon.ico",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "runAfterFinish": true
+    },
+    "files": [
+      "main.js",
+      "package.json",
+      "public/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "bin",
+        "to": "bin",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "data",
+        "to": "data",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ]
+  },
+  "dependencies": {
+    "ws": "8.19.0"
+  }
+}
