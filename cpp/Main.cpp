@@ -120,7 +120,7 @@ int main() {
     double avgBuy = totalBuyPred / validModels;
     double avgSell = totalSellPred / validModels;
 
-    std::string signal = "HOLD";
+    std::string signal = "BUY";
     double finalConfidence = std::max(avgBuy, avgSell) * 100.0;
 
     if ((avgBuy - avgSell) > 0.01) {

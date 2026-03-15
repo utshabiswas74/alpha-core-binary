@@ -23,7 +23,6 @@ const STATS_WINDOW = 100;
 const BASE_STAKE = 1.00;
 const MIN_CONFIDENCE = 10;
 const MAX_DRAWDOWN = 100;
-const MAX_OPEN_TRADES = 1;
 
 let mainWindow;
 let ws = null;
@@ -43,7 +42,6 @@ let accumulatedLoss = 0.00;
 let recoveryStep = 0;
 
 let windowSignals = [];
-let activeVirtualTrades = [];
 let runningPositions = [];
 
 let realSessionTP = 0;
@@ -141,55 +139,37 @@ async function analyzeHistoryBatch() {
     const startIndex = Math.max(0, lastSafeIndex - STATS_WINDOW);
 
     windowSignals = [];
-    activeVirtualTrades = [];
 
     for (let i = startIndex; i <= lastSafeIndex; i++) {
         const currentCandle = liveCandles[i];
-
-        for (let v = activeVirtualTrades.length - 1; v >= 0; v--) {
-            const vt = activeVirtualTrades[v];
-            
-            if (vt.entryEpoch !== currentCandle.epoch) {
-                vt.candlesElapsed++;
-            }
-            
-            let isWin = null;
-            if (vt.candlesElapsed >= 1) {
-                const closePrice = parseFloat(currentCandle.close);
-                if (vt.signal === "BUY") {
-                    isWin = closePrice > vt.entryPrice;
-                } else if (vt.signal === "SELL") {
-                    isWin = closePrice < vt.entryPrice;
-                }
-            }
-
-            if (isWin !== null) {
-                const wsItem = windowSignals.find(s => s.id === vt.id);
-                if (wsItem) wsItem.result = isWin;
-                activeVirtualTrades.splice(v, 1);
-            }
-        }
+        const nextCandle = liveCandles[i + 1];
 
         const pastSubset = liveCandles.slice(0, i + 1);
         const result = await getAiPrediction(pastSubset);
         
         let finalSignal = "HOLD";
+        let isWin = null;
 
         if (result && (result.signal === "BUY" || result.signal === "SELL")) {
             const conf = parseFloat(result.confidence || 100);
-            if (conf >= MIN_CONFIDENCE && activeVirtualTrades.length < MAX_OPEN_TRADES) {
+            if (conf >= MIN_CONFIDENCE) {
                 finalSignal = result.signal;
                 const entryPrice = parseFloat(currentCandle.close);
+                const exitPrice = parseFloat(nextCandle.close);
 
-                activeVirtualTrades.push({ 
-                    id: currentCandle.epoch, entryEpoch: currentCandle.epoch, signal: finalSignal, entryPrice, stake: BASE_STAKE, candlesElapsed: 0
-                });
+                if (finalSignal === "BUY") {
+                    isWin = exitPrice > entryPrice;
+                } else if (finalSignal === "SELL") {
+                    isWin = exitPrice < entryPrice;
+                }
             }
         }
 
-        windowSignals.push({ id: currentCandle.epoch, signal: finalSignal, result: null });
+        windowSignals.push({ id: currentCandle.epoch, signal: finalSignal, result: isWin });
         if (windowSignals.length > STATS_WINDOW) windowSignals.shift();
         
+        updateStatsUI();
+
         if (i % 10 === 0) await new Promise(r => setTimeout(r, 10));
     }
 
@@ -205,41 +185,12 @@ async function analyzeHistoryBatch() {
     isAnalyzingHistory = false;
 }
 
-function checkVirtualTrades(candle) {
-    const currentPrice = parseFloat(candle.close);
-
-    for (let i = activeVirtualTrades.length - 1; i >= 0; i--) {
-        const vt = activeVirtualTrades[i];
-        
-        let isWin = null;
-        if (vt.candlesElapsed >= 1) {
-            if (vt.signal === "BUY") {
-                isWin = currentPrice > vt.entryPrice;
-            } else if (vt.signal === "SELL") {
-                isWin = currentPrice < vt.entryPrice;
-            }
-        }
-
-        if (isWin !== null) {
-            const wsItem = windowSignals.find(s => s.id === vt.id);
-            if (wsItem) wsItem.result = isWin;
-
-            activeVirtualTrades.splice(i, 1);
-            updateStatsUI();
-        }
-    }
-}
-
 async function runLiveAnalysis() {
     if (!isSystemReady || liveCandles.length < 2048) return;
     if (isRunningLive) return;
     isRunningLive = true;
 
     try {
-        for (let i = 0; i < activeVirtualTrades.length; i++) {
-            activeVirtualTrades[i].candlesElapsed++;
-        }
-
         const result = await getAiPrediction(liveCandles);
         const lastCandle = liveCandles[liveCandles.length - 1];
         const currentPrice = parseFloat(lastCandle.close);
@@ -252,16 +203,12 @@ async function runLiveAnalysis() {
             
             const actualStake = parseFloat((BASE_STAKE + (BASE_STAKE * 0.10 * recoveryStep)).toFixed(2));
 
-            if ((signal === "BUY" || signal === "SELL") && confidence > MIN_CONFIDENCE && activeVirtualTrades.length < MAX_OPEN_TRADES) {
+            if ((signal === "BUY" || signal === "SELL") && confidence > MIN_CONFIDENCE && runningPositions.length === 0) {
                     sendToUI('bot-log', `[BOT] ${signal} (${confidence.toFixed(1)}%) | Price: ${currentPrice} | Stake: ${actualStake.toFixed(2)}`);
                     finalSignal = signal;
 
-                    activeVirtualTrades.push({ 
-                        id: lastCandle.epoch, entryEpoch: lastCandle.epoch, signal: finalSignal, entryPrice: currentPrice, stake: actualStake, candlesElapsed: 0
-                    });
-
                     if (isTradingEnabled) {
-                        placeDerivTrade(signal, currentPrice, actualStake);
+                        placeDerivTrade(signal, currentPrice, actualStake, lastCandle.epoch);
                     }
             } else {
                 if (signal === "BUY" || signal === "SELL") {
@@ -351,6 +298,7 @@ function connectToDerivAPI() {
             sessionStats.totalProfit = sessionStats.balance - initialBalance;
             updateStatsUI();
 
+            ws.send(JSON.stringify({ "portfolio": 1 }));
             ws.send(JSON.stringify({ "balance": 1, "subscribe": 1 }));
             ws.send(JSON.stringify({ "proposal_open_contract": 1, "subscribe": 1 }));
 
@@ -364,6 +312,16 @@ function connectToDerivAPI() {
                 "granularity": TRADING_TIMEFRAME_MIN * 60,
                 "subscribe": 1
             }));
+        }
+
+        if (msg.msg_type === 'portfolio') {
+            const activeContracts = msg.portfolio.contracts.map(c => c.contract_id);
+            for (let i = runningPositions.length - 1; i >= 0; i--) {
+                const pos = runningPositions[i];
+                if (pos.id && !activeContracts.includes(pos.id)) {
+                    ws.send(JSON.stringify({ "proposal_open_contract": 1, "contract_id": pos.id }));
+                }
+            }
         }
 
         if (msg.msg_type === 'balance') {
@@ -412,8 +370,6 @@ function connectToDerivAPI() {
                     runLiveAnalysis();
                 }
             }
-            
-            checkVirtualTrades(candle);
         }
 
         if (msg.msg_type === 'proposal_open_contract') {
@@ -424,13 +380,16 @@ function connectToDerivAPI() {
             if (contract.is_sold) {
                 const existingIndex = runningPositions.findIndex(p => p.id === contractId);
                 if (existingIndex !== -1) {
+                    const pos = runningPositions[existingIndex];
                     runningPositions.splice(existingIndex, 1);
 
                     const profit = parseFloat(contract.profit);
                     let status = "BREAKEVEN";
+                    let isWin = null;
 
                     if (profit > 0) {
                         status = "WIN";
+                        isWin = true;
                         realSessionTP++;
                         accumulatedLoss -= profit;
                         if (accumulatedLoss <= 0) {
@@ -439,11 +398,19 @@ function connectToDerivAPI() {
                         }
                     } else if (profit < 0) {
                         status = "LOSS";
+                        isWin = false;
                         realSessionSL++;
                         accumulatedLoss += Math.abs(profit);
                         recoveryStep++;
                     }
                     
+                    if (pos.signalId) {
+                        const wsItem = windowSignals.find(s => s.id === pos.signalId);
+                        if (wsItem) {
+                            wsItem.result = isWin;
+                        }
+                    }
+
                     accumulatedLoss = parseFloat(accumulatedLoss.toFixed(2));
                     const profitText = (profit > 0 ? "+" : "") + profit.toFixed(2);
                     
@@ -453,7 +420,7 @@ function connectToDerivAPI() {
             } else {
                 let existing = runningPositions.find(p => p.id === contractId);
                 if (!existing) {
-                    runningPositions.push({ id: contractId, type: contract.contract_type });
+                    runningPositions.push({ reqId: null, id: contractId, signalId: null, type: contract.contract_type });
                 } else {
                     existing.type = contract.contract_type;
                 }
@@ -462,9 +429,13 @@ function connectToDerivAPI() {
 
         if (msg.msg_type === 'buy') {
             const contractId = msg.buy.contract_id;
+            const reqId = msg.req_id;
 
-            if (!runningPositions.find(p => p.id === contractId)) {
-                runningPositions.push({ id: contractId, type: "UNKNOWN" });
+            const existing = runningPositions.find(p => p.reqId === reqId);
+            if (existing) {
+                existing.id = contractId;
+            } else {
+                runningPositions.push({ reqId: reqId, id: contractId, signalId: null, type: "UNKNOWN" });
             }
             sendToUI('bot-log', `[DERIV] Order Filled | ID: ${contractId}`);
         }
@@ -488,13 +459,14 @@ function connectToDerivAPI() {
     });
 }
 
-function placeDerivTrade(signal, entryPrice, stake) {
+function placeDerivTrade(signal, entryPrice, stake, signalId) {
     if (!ws) return;
 
     const reqId = Date.now() + Math.floor(Math.random() * 1000);
-
     const contractType = (signal === "BUY") ? "CALL" : "PUT";
     const durationMinutes = TRADING_TIMEFRAME_MIN;
+
+    runningPositions.push({ reqId: reqId, id: null, signalId: signalId, type: "UNKNOWN" });
 
     ws.send(JSON.stringify({
         "buy": 1,
@@ -561,4 +533,4 @@ setInterval(() => {
     if (isBotConnected && ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ "ping": 1 }));
     }
-}, 10000);
+}, 30000);
