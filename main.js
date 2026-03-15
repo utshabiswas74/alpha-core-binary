@@ -16,11 +16,12 @@ const ENGINE_PATH = path.join(RESOURCES_PATH, 'bin', 'engine.exe');
 const SYMBOL = "R_100";
 const DERIV_APP_ID = 120975;
 const DERIV_TOKEN = "S4B3gsvNAwpnHEQ";
-const TRADING_TIMEFRAME_MIN = 10;
+const TRADING_TIMEFRAME_MIN = 1;
 const HISTORY_COUNT = 4000;
 const STATS_WINDOW = 100;
 
-const MIN_CONFIDENCE = 50;
+const BASE_STAKE = 1.00;
+const MIN_CONFIDENCE = 10;
 const MAX_DRAWDOWN = 100;
 const MAX_OPEN_TRADES = 1;
 
@@ -44,7 +45,6 @@ let recoveryStep = 0;
 let windowSignals = [];
 let activeVirtualTrades = [];
 let runningPositions = [];
-let pendingOrders = {};
 
 let realSessionTP = 0;
 let realSessionSL = 0;
@@ -145,8 +145,6 @@ async function analyzeHistoryBatch() {
 
     for (let i = startIndex; i <= lastSafeIndex; i++) {
         const currentCandle = liveCandles[i];
-        const highPrice = parseFloat(currentCandle.high);
-        const lowPrice = parseFloat(currentCandle.low);
 
         for (let v = activeVirtualTrades.length - 1; v >= 0; v--) {
             const vt = activeVirtualTrades[v];
@@ -155,33 +153,13 @@ async function analyzeHistoryBatch() {
                 vt.candlesElapsed++;
             }
             
-            let maxProfit = 0;
-            let minProfit = 0;
-            let currentProfit = 0;
-
-            if (vt.signal === "BUY") {
-                maxProfit = ((highPrice - vt.entryPrice) / vt.entryPrice) * vt.stake * vt.multiplier - Math.abs(vt.spread);
-                minProfit = ((lowPrice - vt.entryPrice) / vt.entryPrice) * vt.stake * vt.multiplier - Math.abs(vt.spread);
-                currentProfit = ((parseFloat(currentCandle.close) - vt.entryPrice) / vt.entryPrice) * vt.stake * vt.multiplier - Math.abs(vt.spread);
-            } else {
-                maxProfit = ((vt.entryPrice - lowPrice) / vt.entryPrice) * vt.stake * vt.multiplier - Math.abs(vt.spread);
-                minProfit = ((vt.entryPrice - highPrice) / vt.entryPrice) * vt.stake * vt.multiplier - Math.abs(vt.spread);
-                currentProfit = ((vt.entryPrice - parseFloat(currentCandle.close)) / vt.entryPrice) * vt.stake * vt.multiplier - Math.abs(vt.spread);
-            }
-
             let isWin = null;
-            
-            if (maxProfit >= vt.tp && minProfit <= -Math.abs(vt.sl)) {
-                isWin = false;
-            } else if (minProfit <= -Math.abs(vt.sl)) {
-                isWin = false;
-            } else if (maxProfit >= vt.tp) {
-                isWin = true;
-            } else if (vt.candlesElapsed >= vt.target) {
-                if (currentProfit > 0) {
-                    isWin = true;
-                } else {
-                    isWin = false;
+            if (vt.candlesElapsed >= 1) {
+                const closePrice = parseFloat(currentCandle.close);
+                if (vt.signal === "BUY") {
+                    isWin = closePrice > vt.entryPrice;
+                } else if (vt.signal === "SELL") {
+                    isWin = closePrice < vt.entryPrice;
                 }
             }
 
@@ -201,16 +179,10 @@ async function analyzeHistoryBatch() {
             const conf = parseFloat(result.confidence || 100);
             if (conf >= MIN_CONFIDENCE && activeVirtualTrades.length < MAX_OPEN_TRADES) {
                 finalSignal = result.signal;
-                const stake = parseFloat(result.stake);
-                const multiplier = parseInt(result.multiplier);
-                const tp = parseFloat(result.tp);
-                const sl = parseFloat(result.sl);
-                const target = parseInt(result.target || 1);
-                const spread = parseFloat(result.spread || 0);
                 const entryPrice = parseFloat(currentCandle.close);
 
                 activeVirtualTrades.push({ 
-                    id: currentCandle.epoch, entryEpoch: currentCandle.epoch, signal: finalSignal, entryPrice, stake, multiplier, tp, sl, target, spread, candlesElapsed: 0
+                    id: currentCandle.epoch, entryEpoch: currentCandle.epoch, signal: finalSignal, entryPrice, stake: BASE_STAKE, candlesElapsed: 0
                 });
             }
         }
@@ -234,41 +206,18 @@ async function analyzeHistoryBatch() {
 }
 
 function checkVirtualTrades(candle) {
-    const highPrice = parseFloat(candle.high);
-    const lowPrice = parseFloat(candle.low);
     const currentPrice = parseFloat(candle.close);
 
     for (let i = activeVirtualTrades.length - 1; i >= 0; i--) {
         const vt = activeVirtualTrades[i];
         
-        let maxProfit = 0;
-        let minProfit = 0;
-        let currentProfit = 0;
-
-        if (vt.signal === "BUY") {
-            maxProfit = ((highPrice - vt.entryPrice) / vt.entryPrice) * vt.stake * vt.multiplier - Math.abs(vt.spread);
-            minProfit = ((lowPrice - vt.entryPrice) / vt.entryPrice) * vt.stake * vt.multiplier - Math.abs(vt.spread);
-            currentProfit = ((currentPrice - vt.entryPrice) / vt.entryPrice) * vt.stake * vt.multiplier - Math.abs(vt.spread);
-        } else {
-            maxProfit = ((vt.entryPrice - lowPrice) / vt.entryPrice) * vt.stake * vt.multiplier - Math.abs(vt.spread);
-            minProfit = ((vt.entryPrice - highPrice) / vt.entryPrice) * vt.stake * vt.multiplier - Math.abs(vt.spread);
-            currentProfit = ((vt.entryPrice - currentPrice) / vt.entryPrice) * vt.stake * vt.multiplier - Math.abs(vt.spread);
-        }
-
         let isWin = null;
-        
-        if (maxProfit >= vt.tp && minProfit <= -Math.abs(vt.sl)) {
-            isWin = false;
-        } else if (minProfit <= -Math.abs(vt.sl)) {
-            isWin = false;
-        } else if (maxProfit >= vt.tp) {
-            isWin = true;
-        } else if (vt.candlesElapsed >= vt.target) {
-             if (currentProfit > 0) {
-                 isWin = true;
-             } else {
-                 isWin = false;
-             }
+        if (vt.candlesElapsed >= 1) {
+            if (vt.signal === "BUY") {
+                isWin = currentPrice > vt.entryPrice;
+            } else if (vt.signal === "SELL") {
+                isWin = currentPrice < vt.entryPrice;
+            }
         }
 
         if (isWin !== null) {
@@ -291,17 +240,6 @@ async function runLiveAnalysis() {
             activeVirtualTrades[i].candlesElapsed++;
         }
 
-        for (let i = 0; i < runningPositions.length; i++) {
-            runningPositions[i].candlesElapsed++;
-            
-            if (runningPositions[i].candlesElapsed >= runningPositions[i].target && runningPositions[i].target > 0) {
-                 if (ws && ws.readyState === WebSocket.OPEN) {
-                     ws.send(JSON.stringify({ "sell": runningPositions[i].id, "price": 0 }));
-                     runningPositions[i].target = 0;
-                 }
-            }
-        }
-
         const result = await getAiPrediction(liveCandles);
         const lastCandle = liveCandles[liveCandles.length - 1];
         const currentPrice = parseFloat(lastCandle.close);
@@ -311,27 +249,19 @@ async function runLiveAnalysis() {
         if (result && result.signal !== undefined) {
             const signal = result.signal;
             const confidence = parseFloat(result.confidence);
-            const baseStake = parseFloat(result.stake);
             
-            const actualStake = parseFloat((baseStake + (baseStake * 0.10 * recoveryStep)).toFixed(2));
-            const scaleFactor = actualStake / baseStake;
-            
-            const multiplier = parseInt(result.multiplier);
-            const tp = parseFloat((parseFloat(result.tp) * scaleFactor).toFixed(2));
-            const sl = parseFloat((parseFloat(result.sl) * scaleFactor).toFixed(2));
-            const target = parseInt(result.target || 1);
-            const spread = parseFloat(result.spread || 0.10);
+            const actualStake = parseFloat((BASE_STAKE + (BASE_STAKE * 0.10 * recoveryStep)).toFixed(2));
 
-            if ((signal === "BUY" || signal === "SELL") && confidence > MIN_CONFIDENCE && runningPositions.length < MAX_OPEN_TRADES) {
+            if ((signal === "BUY" || signal === "SELL") && confidence > MIN_CONFIDENCE && activeVirtualTrades.length < MAX_OPEN_TRADES) {
                     sendToUI('bot-log', `[BOT] ${signal} (${confidence.toFixed(1)}%) | Price: ${currentPrice} | Stake: ${actualStake.toFixed(2)}`);
                     finalSignal = signal;
 
                     activeVirtualTrades.push({ 
-                        id: lastCandle.epoch, entryEpoch: lastCandle.epoch, signal: finalSignal, entryPrice: currentPrice, stake: actualStake, multiplier, tp, sl, target, spread, candlesElapsed: 0
+                        id: lastCandle.epoch, entryEpoch: lastCandle.epoch, signal: finalSignal, entryPrice: currentPrice, stake: actualStake, candlesElapsed: 0
                     });
 
                     if (isTradingEnabled) {
-                        placeDerivTrade(signal, currentPrice, actualStake, multiplier, tp, sl, target);
+                        placeDerivTrade(signal, currentPrice, actualStake);
                     }
             } else {
                 if (signal === "BUY" || signal === "SELL") {
@@ -397,9 +327,6 @@ function connectToDerivAPI() {
         }
 
         if (msg.error) {
-            if (msg.req_id && pendingOrders[msg.req_id]) {
-                delete pendingOrders[msg.req_id];
-            }
             if (msg.error.code === 'NoOpenPosition' || msg.error.code === 'BetExpired' || msg.error.code === 'InvalidState' || msg.error.code === 'InvalidContractUpdate') {
                 return;
             }
@@ -526,7 +453,7 @@ function connectToDerivAPI() {
             } else {
                 let existing = runningPositions.find(p => p.id === contractId);
                 if (!existing) {
-                    runningPositions.push({ id: contractId, type: contract.contract_type, target: 0, candlesElapsed: 0 });
+                    runningPositions.push({ id: contractId, type: contract.contract_type });
                 } else {
                     existing.type = contract.contract_type;
                 }
@@ -535,19 +462,9 @@ function connectToDerivAPI() {
 
         if (msg.msg_type === 'buy') {
             const contractId = msg.buy.contract_id;
-            const reqId = msg.req_id;
-            let targetValue = 0;
-
-            if (reqId && pendingOrders[reqId]) {
-                targetValue = pendingOrders[reqId].target;
-                delete pendingOrders[reqId];
-            }
 
             if (!runningPositions.find(p => p.id === contractId)) {
-                runningPositions.push({ id: contractId, type: "UNKNOWN", target: targetValue, candlesElapsed: 0 });
-            } else {
-                const existing = runningPositions.find(p => p.id === contractId);
-                existing.target = targetValue;
+                runningPositions.push({ id: contractId, type: "UNKNOWN" });
             }
             sendToUI('bot-log', `[DERIV] Order Filled | ID: ${contractId}`);
         }
@@ -571,13 +488,14 @@ function connectToDerivAPI() {
     });
 }
 
-function placeDerivTrade(signal, entryPrice, stake, multiplier, tp, sl, target) {
+function placeDerivTrade(signal, entryPrice, stake) {
     if (!ws) return;
 
     const reqId = Date.now() + Math.floor(Math.random() * 1000);
-    pendingOrders[reqId] = { target: target };
 
-    const contractType = (signal === "BUY") ? "MULTUP" : "MULTDOWN";
+    const contractType = (signal === "BUY") ? "CALL" : "PUT";
+    const durationMinutes = TRADING_TIMEFRAME_MIN;
+
     ws.send(JSON.stringify({
         "buy": 1,
         "price": 1000,
@@ -587,15 +505,12 @@ function placeDerivTrade(signal, entryPrice, stake, multiplier, tp, sl, target) 
             "contract_type": contractType,
             "currency": "USD",
             "symbol": SYMBOL,
-            "multiplier": multiplier,
-            "limit_order": {
-                "stop_loss": sl,
-                "take_profit": tp
-            }
+            "duration": durationMinutes,
+            "duration_unit": "m"
         },
         "req_id": reqId
     }));
-    sendToUI('bot-log', `[ENTRY] ${contractType} | Price: ${entryPrice} | Limit: ${sl.toFixed(2)}/${tp.toFixed(2)}`);
+    sendToUI('bot-log', `[ENTRY] ${contractType} | Price: ${entryPrice} | Dur: ${durationMinutes}m | Stake: ${stake.toFixed(2)}`);
 }
 
 function startDerivBot() { 
