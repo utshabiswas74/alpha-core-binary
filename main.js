@@ -16,12 +16,12 @@ const ENGINE_PATH = path.join(RESOURCES_PATH, 'bin', 'engine.exe');
 const SYMBOL = "R_100";
 const DERIV_APP_ID = 120975;
 const DERIV_TOKEN = "S4B3gsvNAwpnHEQ";
-const TRADING_TIMEFRAME_MIN = 1;
+const TRADING_TIMEFRAME_MIN = 10;
 const HISTORY_COUNT = 4000;
 const STATS_WINDOW = 100;
 
 const BASE_STAKE = 1.00;
-const MIN_CONFIDENCE = 10;
+const MIN_CONFIDENCE = 50;
 const MAX_DRAWDOWN = 100;
 
 let mainWindow;
@@ -237,6 +237,7 @@ function stopDerivBot() {
     recoveryStep = 0;
     isAnalyzingHistory = false;
     isRunningLive = false;
+    runningPositions = [];
     if (ws) {
         ws.terminate();
         ws = null;
@@ -274,6 +275,13 @@ function connectToDerivAPI() {
         }
 
         if (msg.error) {
+            if (msg.req_id) {
+                const pendingIndex = runningPositions.findIndex(p => p.reqId === msg.req_id);
+                if (pendingIndex !== -1) {
+                    runningPositions.splice(pendingIndex, 1);
+                }
+            }
+
             if (msg.error.code === 'NoOpenPosition' || msg.error.code === 'BetExpired' || msg.error.code === 'InvalidState' || msg.error.code === 'InvalidContractUpdate') {
                 return;
             }
@@ -315,11 +323,15 @@ function connectToDerivAPI() {
         }
 
         if (msg.msg_type === 'portfolio') {
-            const activeContracts = msg.portfolio.contracts.map(c => c.contract_id);
-            for (let i = runningPositions.length - 1; i >= 0; i--) {
-                const pos = runningPositions[i];
-                if (pos.id && !activeContracts.includes(pos.id)) {
-                    ws.send(JSON.stringify({ "proposal_open_contract": 1, "contract_id": pos.id }));
+            if (msg.portfolio.contracts.length === 0) {
+                runningPositions = [];
+            } else {
+                const activeContracts = msg.portfolio.contracts.map(c => c.contract_id);
+                for (let i = runningPositions.length - 1; i >= 0; i--) {
+                    const pos = runningPositions[i];
+                    if (pos.id && !activeContracts.includes(pos.id)) {
+                        ws.send(JSON.stringify({ "proposal_open_contract": 1, "contract_id": pos.id }));
+                    }
                 }
             }
         }
@@ -431,12 +443,23 @@ function connectToDerivAPI() {
             const contractId = msg.buy.contract_id;
             const reqId = msg.req_id;
 
-            const existing = runningPositions.find(p => p.reqId === reqId);
+            let existing = null;
+            
+            if (reqId) {
+                existing = runningPositions.find(p => p.reqId === reqId);
+            }
+            
+            if (!existing) {
+                existing = runningPositions.find(p => p.id === null);
+            }
+
             if (existing) {
                 existing.id = contractId;
+                if (reqId) existing.reqId = reqId;
             } else {
-                runningPositions.push({ reqId: reqId, id: contractId, signalId: null, type: "UNKNOWN" });
+                runningPositions.push({ reqId: reqId || null, id: contractId, signalId: null, type: "UNKNOWN" });
             }
+            
             sendToUI('bot-log', `[DERIV] Order Filled | ID: ${contractId}`);
         }
     });
@@ -482,7 +505,7 @@ function placeDerivTrade(signal, entryPrice, stake, signalId) {
         },
         "req_id": reqId
     }));
-    sendToUI('bot-log', `[ENTRY] ${contractType} | Price: ${entryPrice} | Dur: ${durationMinutes}m | Stake: ${stake.toFixed(2)}`);
+    sendToUI('bot-log', `[ENTRY] ${contractType} | Price: ${entryPrice} | Stake: ${stake.toFixed(2)}`);
 }
 
 function startDerivBot() { 
@@ -533,4 +556,4 @@ setInterval(() => {
     if (isBotConnected && ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ "ping": 1 }));
     }
-}, 30000);
+}, 10000);
