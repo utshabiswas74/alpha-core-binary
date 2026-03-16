@@ -418,9 +418,10 @@ function connectToDerivAPI() {
                         if (closedCandle) {
                             const closedEpoch = closedCandle.epoch;
                             const closedPrice = parseFloat(closedCandle.close);
+                            const actualCloseTime = closedEpoch + (TRADING_TIMEFRAME_MIN * 60);
 
                             windowSignals.forEach(s => {
-                                if (s.result === null && s.targetEpoch <= (closedEpoch + (TRADING_TIMEFRAME_MIN * 60)) && (s.signal === "BUY" || s.signal === "SELL")) {
+                                if (s.result === null && s.targetEpoch <= actualCloseTime && (s.signal === "BUY" || s.signal === "SELL")) {
                                     if (s.signal === "BUY") {
                                         s.result = closedPrice > s.entryPrice;
                                     } else if (s.signal === "SELL") {
