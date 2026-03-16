@@ -124,7 +124,7 @@ int main() {
     double finalConfidence = std::max(avgBuy, avgSell) * 100.0;
 
     if(finalConfidence > 50) {
-        if ((avgBuy - avgSell) > 0.09) {
+        if ((avgBuy - avgSell) > 0.01) {
             signal = "BUY";
         } else if ((avgSell - avgBuy) > 0.01) {
             signal = "SELL";
