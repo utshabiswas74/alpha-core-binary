@@ -39,6 +39,7 @@ let initialBalance = null;
 let targetBalance = null;
 let accumulatedLoss = 0.00;
 let recoveryStep = 0;
+let systemLockEpoch = 0;
 
 let windowSignals = [];
 let runningPositions = [];
@@ -138,6 +139,7 @@ async function analyzeHistoryBatch() {
     const startIndex = Math.max(0, lastSafeIndex - STATS_WINDOW);
 
     windowSignals = [];
+    systemLockEpoch = 0;
 
     for (let i = startIndex; i <= lastSafeIndex; i++) {
         const currentCandle = liveCandles[i];
@@ -151,17 +153,26 @@ async function analyzeHistoryBatch() {
 
         if (result && (result.signal === "BUY" || result.signal === "SELL")) {
             const target = result.target ? parseInt(result.target) : 1;
-            finalSignal = result.signal;
-            targetEpoch = currentCandle.epoch + (target * TRADING_TIMEFRAME_MIN * 60);
+            const tempTargetEpoch = currentCandle.epoch + (target * TRADING_TIMEFRAME_MIN * 60);
             
-            if (i + target < liveCandles.length) {
-                const exitPrice = parseFloat(liveCandles[i + target].close);
-                if (finalSignal === "BUY") {
-                    isWin = exitPrice > entryPrice;
-                } else if (finalSignal === "SELL") {
-                    isWin = exitPrice < entryPrice;
+            if (currentCandle.epoch >= systemLockEpoch) {
+                finalSignal = result.signal;
+                targetEpoch = tempTargetEpoch;
+                systemLockEpoch = targetEpoch + (TRADING_TIMEFRAME_MIN * 60);
+                
+                if (i + target < liveCandles.length) {
+                    const exitPrice = parseFloat(liveCandles[i + target].close);
+                    if (finalSignal === "BUY") {
+                        isWin = exitPrice > entryPrice;
+                    } else if (finalSignal === "SELL") {
+                        isWin = exitPrice < entryPrice;
+                    }
                 }
             }
+        }
+
+        if (targetEpoch === 0) {
+            targetEpoch = currentCandle.epoch + (TRADING_TIMEFRAME_MIN * 60);
         }
 
         windowSignals.push({ 
@@ -209,13 +220,15 @@ async function runLiveAnalysis() {
             const signal = result.signal;
             const confidence = parseFloat(result.confidence || 0);
             const target = result.target ? parseInt(result.target) : 1;
-            targetEpoch = lastCandle.epoch + (target * TRADING_TIMEFRAME_MIN * 60);
+            const tempTargetEpoch = lastCandle.epoch + (target * TRADING_TIMEFRAME_MIN * 60);
             
             const actualStake = parseFloat((BASE_STAKE + (BASE_STAKE * 0.25 * recoveryStep)).toFixed(2));
 
-            if ((signal === "BUY" || signal === "SELL") && runningPositions.length === 0) {
+            if ((signal === "BUY" || signal === "SELL") && lastCandle.epoch >= systemLockEpoch) {
                 sendToUI('bot-log', `[BOT] ${signal} (${confidence.toFixed(1)}%) | Price: ${currentPrice.toFixed(2)} | Target: ${target} | Stake: ${actualStake.toFixed(2)}`);
                 finalSignal = signal;
+                targetEpoch = tempTargetEpoch;
+                systemLockEpoch = targetEpoch + (TRADING_TIMEFRAME_MIN * 60);
 
                 if (isTradingEnabled) {
                     isRealTrade = true;
@@ -256,6 +269,7 @@ function stopDerivBot() {
     targetBalance = null;
     accumulatedLoss = 0.00;
     recoveryStep = 0;
+    systemLockEpoch = 0;
     isAnalyzingHistory = false;
     isRunningLive = false;
     runningPositions = [];
@@ -328,7 +342,6 @@ function connectToDerivAPI() {
             sessionStats.totalProfit = sessionStats.balance - initialBalance;
             updateStatsUI();
 
-            ws.send(JSON.stringify({ "portfolio": 1 }));
             ws.send(JSON.stringify({ "balance": 1, "subscribe": 1 }));
             ws.send(JSON.stringify({ "proposal_open_contract": 1, "subscribe": 1 }));
 
@@ -342,20 +355,6 @@ function connectToDerivAPI() {
                 "granularity": TRADING_TIMEFRAME_MIN * 60,
                 "subscribe": 1
             }));
-        }
-
-        if (msg.msg_type === 'portfolio') {
-            if (msg.portfolio.contracts.length === 0) {
-                runningPositions = [];
-            } else {
-                const activeContracts = msg.portfolio.contracts.map(c => c.contract_id);
-                for (let i = runningPositions.length - 1; i >= 0; i--) {
-                    const pos = runningPositions[i];
-                    if (pos.id && !activeContracts.includes(pos.id)) {
-                        ws.send(JSON.stringify({ "proposal_open_contract": 1, "contract_id": pos.id }));
-                    }
-                }
-            }
         }
 
         if (msg.msg_type === 'balance') {
@@ -473,9 +472,7 @@ function connectToDerivAPI() {
                 }
             } else {
                 let existing = runningPositions.find(p => p.id === contractId);
-                if (!existing) {
-                    runningPositions.push({ reqId: null, id: contractId, signalId: null, type: contract.contract_type });
-                } else {
+                if (existing) {
                     existing.type = contract.contract_type;
                 }
             }
@@ -611,10 +608,3 @@ app.whenReady().then(createWindow);
 app.on('window-all-closed', () => { 
     if (process.platform !== 'darwin') app.quit(); 
 });
-
-const SYNC_INTERVAL_MS = (TRADING_TIMEFRAME_MIN * 60 * 1000);
-setInterval(() => {
-    if (isBotConnected && ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ "portfolio": 1 }));
-    }
-}, SYNC_INTERVAL_MS);
