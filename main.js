@@ -347,7 +347,11 @@ function connectToDerivAPI() {
                     accumulatedLoss = 0;
                     recoveryStep = 0;
                 } else {
-                    accumulatedLoss = parseFloat((targetBalance - sessionStats.balance).toFixed(2));
+                    let currentLoss = parseFloat((targetBalance - sessionStats.balance).toFixed(2));
+                    if (currentLoss > accumulatedLoss) {
+                        recoveryStep++;
+                        accumulatedLoss = currentLoss;
+                    }
                 }
             }
 
@@ -415,7 +419,6 @@ function connectToDerivAPI() {
                         status = "LOSS";
                         isWin = false;
                         realSessionSL++;
-                        recoveryStep++;
                     }
                     
                     if (pos.signalId) {
