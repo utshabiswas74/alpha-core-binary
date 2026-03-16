@@ -128,19 +128,13 @@ int main() {
     } else if ((avgSell - avgBuy) > 0.01) {
         signal = "SELL";
     }
-    
 
     std::cout << "JSON_START{"
               << "\"signal\": \"" << signal << "\", "
               << "\"confidence\": " << std::fixed << std::setprecision(2) << finalConfidence << ", "
               << "\"prob_buy\": " << std::fixed << std::setprecision(6) << avgBuy << ", "
               << "\"prob_sell\": " << std::fixed << std::setprecision(6) << avgSell << ", "
-              << "\"stake\": " << std::fixed << std::setprecision(2) << Config::STAKE_USD << ", "
-              << "\"multiplier\": " << Config::MULTIPLIER_VALUE << ", "
-              << "\"tp\": " << std::fixed << std::setprecision(2) << Config::TAKE_PROFIT_USD << ", "
-              << "\"sl\": " << std::fixed << std::setprecision(2) << Config::STOP_LOSS_USD  << ", "
-              << "\"spread\": " << std::fixed << std::setprecision(2) << Config::SPREAD_USD << ", "
-              << "\"target\": " << std::fixed << std::setprecision(2) << Config::TARGET_CANDLES
+              << "\"target\": " << Config::TARGET_CANDLES
               << "}JSON_END\n";
 
     return 0;

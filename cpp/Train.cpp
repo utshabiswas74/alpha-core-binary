@@ -58,11 +58,9 @@ int main(int argc, char* argv[]) {
 
     Config::ModelConfig config;
     std::string outputModelFile;
-    int valSize = 4096;
 
     if (argc > 1) {
         outputModelFile = Config::MODEL_FILE_BASE + "_v" + std::string(argv[1]) + ".bin";
-        valSize = 1024;
     } else {
         outputModelFile = getTargetModelFile();
     }
@@ -77,6 +75,8 @@ int main(int argc, char* argv[]) {
     
     if (history.size() < config.inputTimeSteps + 100) return 1;
 
+    int valSize = static_cast<int>(history.size() * 0.10);
+
     std::cout << "Calculating indicators..." << std::endl;
     std::vector<double> rsi = Utils::calculateRSI(closes, 9);
     std::vector<double> ema20 = Utils::calculateEMA(closes, 20);
@@ -89,62 +89,19 @@ int main(int argc, char* argv[]) {
 
     std::vector<double> allBuyLabels(history.size(), 0.0);
     std::vector<double> allSellLabels(history.size(), 0.0);
-    std::vector<int> allBuyExits(history.size(), 0);
-    std::vector<int> allSellExits(history.size(), 0);
-
-    double tpRatio = Config::TAKE_PROFIT_USD / (Config::STAKE_USD * Config::MULTIPLIER_VALUE);
-    double slRatio = Config::STOP_LOSS_USD / (Config::STAKE_USD * Config::MULTIPLIER_VALUE);
-    double spreadRatio = Config::SPREAD_USD / (Config::STAKE_USD * Config::MULTIPLIER_VALUE);
 
     int buyWins = 0, sellWins = 0, totalTrain = 0;
 
     for (int i = config.inputTimeSteps + 50; i < history.size() - Config::TARGET_CANDLES - 1; ++i) {
-        double closePrice = closes[i];
-        double tpDist = tpRatio * closePrice;
-        double slDist = slRatio * closePrice;
-        double spreadDist = spreadRatio * closePrice;
+        double currentClose = closes[i];
+        int targetIdx = i + Config::TARGET_CANDLES;
+        double targetClose = closes[targetIdx];
 
-        double entryBuy = closePrice + spreadDist;
-        double buyTP = entryBuy + tpDist;
-        double buySL = entryBuy - slDist;
-
-        double entrySell = closePrice - spreadDist;
-        double sellTP = entrySell - tpDist;
-        double sellSL = entrySell + slDist;
-
-        double bLabel = 0.0, sLabel = 0.0;
-        int bExit = 0, sExit = 0;
-        bool bDone = false, sDone = false;
-
-        int limitIdx = std::min((int)history.size() - 1, i + Config::TARGET_CANDLES);
-
-        for (int j = i + 1; j <= limitIdx; ++j) {
-            double h = history[j].high;
-            double l = history[j].low;
-            double c = history[j].close;
-
-            if (!bDone) {
-                if (l <= buySL) { bLabel = 0.0; bExit = -1; bDone = true; }
-                else if (h >= buyTP) { bLabel = 1.0; bExit = 1; bDone = true; }
-                else if (j == limitIdx) { bLabel = (c > entryBuy) ? 1.0 : 0.0; bExit = 0; bDone = true; }
-            }
-
-            if (!sDone) {
-                if (h >= sellSL) { sLabel = 0.0; sExit = -1; sDone = true; }
-                else if (l <= sellTP) { sLabel = 1.0; sExit = 1; sDone = true; }
-                else if (j == limitIdx) { sLabel = (c < entrySell) ? 1.0 : 0.0; sExit = 0; sDone = true; }
-            }
-        }
-
-        if (bLabel == 1.0 && sLabel == 1.0) {
-            bLabel = 0.0; sLabel = 0.0;
-            bExit = 0; sExit = 0;
-        }
+        double bLabel = (targetClose > currentClose) ? 1.0 : 0.0;
+        double sLabel = (targetClose < currentClose) ? 1.0 : 0.0;
 
         allBuyLabels[i] = bLabel;
         allSellLabels[i] = sLabel;
-        allBuyExits[i] = bExit;
-        allSellExits[i] = sExit;
 
         if (i < trainSize) {
             trainIndices.push_back(i);
@@ -183,15 +140,12 @@ int main(int argc, char* argv[]) {
 
     std::vector<Tensor> valInputs(valIndices.size());
     std::vector<double> valBuyTargets(valIndices.size()), valSellTargets(valIndices.size());
-    std::vector<int> valBuyExits(valIndices.size()), valSellExits(valIndices.size());
 
     for (size_t i = 0; i < valIndices.size(); ++i) {
         int idx = valIndices[i];
         valInputs[i] = Utils::generateInputTensor(idx, history, closes, ema20, rsi, atr, adx, bbPct, config.inputTimeSteps, config.inputFeatures);
         valBuyTargets[i] = allBuyLabels[idx];
         valSellTargets[i] = allSellLabels[idx];
-        valBuyExits[i] = allBuyExits[idx];
-        valSellExits[i] = allSellExits[idx];
     }
 
     CNN buyModel(config), sellModel(config);
@@ -215,7 +169,7 @@ int main(int argc, char* argv[]) {
     std::vector<int> shuffleIdx(trainInputs.size());
     std::iota(shuffleIdx.begin(), shuffleIdx.end(), 0);
 
-    std::cout << "Starting DUAL-MODEL training with Class Weights..." << std::endl;
+    std::cout << "Starting DUAL-MODEL training for Binary Options..." << std::endl;
     
     for (int epoch = 1; epoch <= Config::EPOCHS; ++epoch) {
         auto startClock = std::chrono::high_resolution_clock::now();
@@ -262,8 +216,8 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        int bGiven = 0, bCorrect = 0, bTP = 0, bSL = 0;
-        int sGiven = 0, sCorrect = 0, sTP = 0, sSL = 0;
+        int bGiven = 0, bCorrect = 0;
+        int sGiven = 0, sCorrect = 0;
         
         for (size_t j = 0; j < valInputs.size(); ++j) {
             if (valInputs[j].depth == 0) continue;
@@ -273,14 +227,10 @@ int main(int argc, char* argv[]) {
             if (bPred > 0.50) {
                 bGiven++;
                 if (valBuyTargets[j] == 1.0) bCorrect++;
-                if (valBuyExits[j] == 1) bTP++;
-                else if (valBuyExits[j] == -1) bSL++;
             }
             if (sPred > 0.50) {
                 sGiven++;
                 if (valSellTargets[j] == 1.0) sCorrect++;
-                if (valSellExits[j] == 1) sTP++;
-                else if (valSellExits[j] == -1) sSL++;
             }
         }
 
@@ -293,8 +243,8 @@ int main(int argc, char* argv[]) {
 
         std::cout << "[Epoch " << std::setw(3) << epoch << "] Time: " 
                   << std::fixed << std::setprecision(2) << epochTime.count() << "s | "
-                  << "Buy_Val: " << std::setprecision(2) << bValAcc << "% [SL:" << bSL << "/TP:" << bTP << "] | "
-                  << "Sell_Val: " << std::setprecision(2) << sValAcc << "% [SL:" << sSL << "/TP:" << sTP << "]";
+                  << "Buy_Val: " << std::setprecision(2) << bValAcc << "% | "
+                  << "Sell_Val: " << std::setprecision(2) << sValAcc << "%";
 
         if (avgValAcc > bestAcc && epoch > 4) {
             bestAcc = avgValAcc;

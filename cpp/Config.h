@@ -24,13 +24,6 @@ namespace Config {
         int outputSize = 1;
     };
     
-    const double STAKE_USD = 1.00;
-    const int MULTIPLIER_VALUE = 100;
-    const double TAKE_PROFIT_USD = 1.00;
-    const double STOP_LOSS_USD = 1.00;
-    const double SPREAD_USD = 0.10;
-    const int TARGET_CANDLES = 10;
-
     const int EPOCHS = 128;
     const int BATCH_SIZE = 128;
     const double LEARNING_RATE = 0.0001;
@@ -48,7 +41,8 @@ namespace Config {
     const int IDX_PRICE_POS = 13;
     const int IDX_BB_PCT = 14;
 
-    const int MAX_ENSEMBLE_MODELS = 04;
+    const int TARGET_CANDLES = 1;
+    const int MAX_ENSEMBLE_MODELS = 4;
     const std::string MODEL_FILE_BASE = "data/model_brain";
     const std::string TRAIN_DATA_FILE = "data/training_data.csv";
 }
