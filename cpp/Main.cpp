@@ -123,10 +123,12 @@ int main() {
     std::string signal = "HOLD";
     double finalConfidence = std::max(avgBuy, avgSell) * 100.0;
 
-    if ((avgBuy - avgSell) > 0.01) {
-        signal = "BUY";
-    } else if ((avgSell - avgBuy) > 0.01) {
-        signal = "SELL";
+    if(finalConfidence > 50) {
+        if ((avgBuy - avgSell) > 0.09) {
+            signal = "BUY";
+        } else if ((avgSell - avgBuy) > 0.01) {
+            signal = "SELL";
+        }
     }
 
     std::cout << "JSON_START{"

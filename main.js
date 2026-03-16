@@ -405,10 +405,9 @@ function connectToDerivAPI() {
             const contractId = contract.contract_id;
 
             if (contract.is_sold) {
-                const existingIndex = runningPositions.findIndex(p => p.id === contractId);
-                if (existingIndex !== -1) {
-                    const pos = runningPositions[existingIndex];
-                    runningPositions.splice(existingIndex, 1);
+                const pos = runningPositions.find(p => p.id === contractId);
+                if (pos) {
+                    runningPositions = runningPositions.filter(p => p.id !== contractId);
 
                     const profit = parseFloat(contract.profit);
                     let status = "BREAKEVEN";
@@ -451,9 +450,9 @@ function connectToDerivAPI() {
             const contractId = msg.buy.contract_id;
             const reqId = msg.req_id;
 
-            let existing = null;
+            let existing = runningPositions.find(p => p.id === contractId);
             
-            if (reqId) {
+            if (!existing && reqId) {
                 existing = runningPositions.find(p => p.reqId === reqId);
             }
             
@@ -467,6 +466,23 @@ function connectToDerivAPI() {
             } else {
                 runningPositions.push({ reqId: reqId || null, id: contractId, signalId: null, type: "UNKNOWN" });
             }
+
+            let uniquePositions = [];
+            runningPositions.forEach(pos => {
+                if (pos.id === null) {
+                    uniquePositions.push(pos);
+                } else {
+                    let existingUnique = uniquePositions.find(u => u.id === pos.id);
+                    if (!existingUnique) {
+                        uniquePositions.push(pos);
+                    } else {
+                        if (pos.reqId) existingUnique.reqId = pos.reqId;
+                        if (pos.signalId) existingUnique.signalId = pos.signalId;
+                        if (pos.type !== "UNKNOWN") existingUnique.type = pos.type;
+                    }
+                }
+            });
+            runningPositions = uniquePositions;
             
             sendToUI('bot-log', `[DERIV] Order Filled | ID: ${contractId}`);
         }
