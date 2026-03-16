@@ -16,11 +16,11 @@ const ENGINE_PATH = path.join(RESOURCES_PATH, 'bin', 'engine.exe');
 const SYMBOL = "R_100";
 const DERIV_APP_ID = 120975;
 const DERIV_TOKEN = "S4B3gsvNAwpnHEQ";
-const TRADING_TIMEFRAME_MIN = 10;
+const TRADING_TIMEFRAME_MIN = 1;
 const HISTORY_COUNT = 4000;
 const STATS_WINDOW = 100;
 
-const BASE_STAKE = 1.00;
+const BASE_STAKE = 0.40;
 const MIN_CONFIDENCE = 50;
 const MAX_DRAWDOWN = 100;
 
@@ -38,6 +38,7 @@ let isRunningLive = false;
 
 let lastProcessedEpoch = 0;
 let initialBalance = null;
+let targetBalance = null;
 let accumulatedLoss = 0.00;
 let recoveryStep = 0;
 
@@ -201,7 +202,7 @@ async function runLiveAnalysis() {
             const signal = result.signal;
             const confidence = parseFloat(result.confidence);
             
-            const actualStake = parseFloat((BASE_STAKE + (BASE_STAKE * 0.10 * recoveryStep)).toFixed(2));
+            const actualStake = parseFloat((BASE_STAKE + (BASE_STAKE * 0.25 * recoveryStep)).toFixed(2));
 
             if ((signal === "BUY" || signal === "SELL") && confidence > MIN_CONFIDENCE && runningPositions.length === 0) {
                     sendToUI('bot-log', `[BOT] ${signal} (${confidence.toFixed(1)}%) | Price: ${currentPrice} | Stake: ${actualStake.toFixed(2)}`);
@@ -233,6 +234,7 @@ function stopDerivBot() {
     isTradingEnabled = false;
     isSystemReady = false;
     initialBalance = null;
+    targetBalance = null;
     accumulatedLoss = 0.00;
     recoveryStep = 0;
     isAnalyzingHistory = false;
@@ -302,6 +304,7 @@ function connectToDerivAPI() {
             sessionStats.balance = parseFloat(msg.authorize.balance);
             if (initialBalance === null) {
                 initialBalance = sessionStats.balance;
+                targetBalance = sessionStats.balance;
             }
             sessionStats.totalProfit = sessionStats.balance - initialBalance;
             updateStatsUI();
@@ -338,8 +341,17 @@ function connectToDerivAPI() {
 
         if (msg.msg_type === 'balance') {
             sessionStats.balance = parseFloat(msg.balance.balance);
+            
             if (initialBalance !== null) {
                 sessionStats.totalProfit = sessionStats.balance - initialBalance;
+
+                if (sessionStats.balance >= targetBalance) {
+                    targetBalance = sessionStats.balance;
+                    accumulatedLoss = 0;
+                    recoveryStep = 0;
+                } else {
+                    accumulatedLoss = parseFloat((targetBalance - sessionStats.balance).toFixed(2));
+                }
             }
 
             if (initialBalance !== null && (initialBalance - sessionStats.balance) >= MAX_DRAWDOWN && !isCircuitTripped && isTradingEnabled) {
@@ -403,16 +415,10 @@ function connectToDerivAPI() {
                         status = "WIN";
                         isWin = true;
                         realSessionTP++;
-                        accumulatedLoss -= profit;
-                        if (accumulatedLoss <= 0) {
-                            accumulatedLoss = 0;
-                            recoveryStep = 0;
-                        }
                     } else if (profit < 0) {
                         status = "LOSS";
                         isWin = false;
                         realSessionSL++;
-                        accumulatedLoss += Math.abs(profit);
                         recoveryStep++;
                     }
                     
@@ -423,7 +429,6 @@ function connectToDerivAPI() {
                         }
                     }
 
-                    accumulatedLoss = parseFloat(accumulatedLoss.toFixed(2));
                     const profitText = (profit > 0 ? "+" : "") + profit.toFixed(2);
                     
                     updateStatsUI();
@@ -459,6 +464,8 @@ function connectToDerivAPI() {
             } else {
                 runningPositions.push({ reqId: reqId || null, id: contractId, signalId: null, type: "UNKNOWN" });
             }
+            
+            ws.send(JSON.stringify({ "proposal_open_contract": 1, "contract_id": contractId, "subscribe": 1 }));
             
             sendToUI('bot-log', `[DERIV] Order Filled | ID: ${contractId}`);
         }
@@ -517,6 +524,7 @@ ipcMain.on('toggle-trading-logic', (e, isActive) => {
     if (isActive && isCircuitTripped) {
         isCircuitTripped = false;
         initialBalance = sessionStats.balance;
+        targetBalance = sessionStats.balance;
     }
     isTradingEnabled = isActive;
 });
@@ -552,8 +560,9 @@ app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit(); 
 });
 
+const SYNC_INTERVAL_MS = (TRADING_TIMEFRAME_MIN * 60 * 1000);
 setInterval(() => {
     if (isBotConnected && ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ "ping": 1 }));
+        ws.send(JSON.stringify({ "portfolio": 1 }));
     }
-}, 10000);
+}, SYNC_INTERVAL_MS);
