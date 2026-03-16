@@ -146,11 +146,13 @@ async function analyzeHistoryBatch() {
         
         let finalSignal = "HOLD";
         let isWin = null;
+        let targetEpoch = 0;
+        let entryPrice = parseFloat(currentCandle.close);
 
         if (result && (result.signal === "BUY" || result.signal === "SELL")) {
             const target = result.target ? parseInt(result.target) : 1;
             finalSignal = result.signal;
-            const entryPrice = parseFloat(currentCandle.close);
+            targetEpoch = currentCandle.epoch + (target * TRADING_TIMEFRAME_MIN * 60);
             
             if (i + target < liveCandles.length) {
                 const exitPrice = parseFloat(liveCandles[i + target].close);
@@ -162,7 +164,14 @@ async function analyzeHistoryBatch() {
             }
         }
 
-        windowSignals.push({ id: currentCandle.epoch, signal: finalSignal, result: isWin });
+        windowSignals.push({ 
+            id: currentCandle.epoch, 
+            signal: finalSignal, 
+            result: isWin,
+            entryPrice: entryPrice,
+            targetEpoch: targetEpoch,
+            isRealTrade: false
+        });
         if (windowSignals.length > STATS_WINDOW) windowSignals.shift();
         
         updateStatsUI();
@@ -193,21 +202,25 @@ async function runLiveAnalysis() {
         const currentPrice = parseFloat(lastCandle.close);
         
         let finalSignal = "HOLD";
+        let isRealTrade = false;
+        let targetEpoch = 0;
 
         if (result && result.signal !== undefined) {
             const signal = result.signal;
             const confidence = parseFloat(result.confidence || 0);
             const target = result.target ? parseInt(result.target) : 1;
+            targetEpoch = lastCandle.epoch + (target * TRADING_TIMEFRAME_MIN * 60);
             
             const actualStake = parseFloat((BASE_STAKE + (BASE_STAKE * 0.25 * recoveryStep)).toFixed(2));
 
             if ((signal === "BUY" || signal === "SELL") && runningPositions.length === 0) {
-                    sendToUI('bot-log', `[BOT] ${signal} (${confidence.toFixed(1)}%) | Price: ${currentPrice.toFixed(2)} | Target: ${target} | Stake: ${actualStake.toFixed(2)}`);
-                    finalSignal = signal;
+                sendToUI('bot-log', `[BOT] ${signal} (${confidence.toFixed(1)}%) | Price: ${currentPrice.toFixed(2)} | Target: ${target} | Stake: ${actualStake.toFixed(2)}`);
+                finalSignal = signal;
 
-                    if (isTradingEnabled) {
-                        placeDerivTrade(signal, currentPrice, actualStake, lastCandle.epoch, target);
-                    }
+                if (isTradingEnabled) {
+                    isRealTrade = true;
+                    placeDerivTrade(signal, currentPrice, actualStake, lastCandle.epoch, target);
+                }
             } else {
                 if (signal === "BUY" || signal === "SELL") {
                     sendToUI('bot-log', `[FILTER] ${signal} (${confidence.toFixed(1)}%) | Price: ${currentPrice.toFixed(2)} | Target: ${target} | Stake: ${actualStake.toFixed(2)}`);
@@ -215,9 +228,18 @@ async function runLiveAnalysis() {
                     sendToUI('bot-log', `[FILTER] HOLD (${confidence.toFixed(1)}%) | Price: ${currentPrice.toFixed(2)} | Target: ${target} | Stake: ${actualStake.toFixed(2)}`);
                 }
             }
+        } else {
+            targetEpoch = lastCandle.epoch + (TRADING_TIMEFRAME_MIN * 60);
         }
 
-        windowSignals.push({ id: lastCandle.epoch, signal: finalSignal, result: null });
+        windowSignals.push({ 
+            id: lastCandle.epoch, 
+            signal: finalSignal, 
+            result: null,
+            entryPrice: currentPrice,
+            targetEpoch: targetEpoch,
+            isRealTrade: isRealTrade
+        });
         if (windowSignals.length > STATS_WINDOW) windowSignals.shift();
 
         updateStatsUI();
@@ -391,6 +413,33 @@ function connectToDerivAPI() {
                 if (liveCandles.length > HISTORY_COUNT) liveCandles.shift();
 
                 if (currentEpoch > lastProcessedEpoch) {
+                    if (lastProcessedEpoch !== 0) {
+                        const closedCandle = liveCandles[liveCandles.length - 2];
+                        if (closedCandle) {
+                            const closedEpoch = closedCandle.epoch;
+                            const closedPrice = parseFloat(closedCandle.close);
+
+                            windowSignals.forEach(s => {
+                                if (s.result === null && s.targetEpoch <= (closedEpoch + (TRADING_TIMEFRAME_MIN * 60)) && (s.signal === "BUY" || s.signal === "SELL")) {
+                                    if (s.signal === "BUY") {
+                                        s.result = closedPrice > s.entryPrice;
+                                    } else if (s.signal === "SELL") {
+                                        s.result = closedPrice < s.entryPrice;
+                                    }
+
+                                    if (s.isRealTrade && s.result !== null) {
+                                        if (s.result === true) {
+                                            realSessionTP++;
+                                        } else {
+                                            realSessionSL++;
+                                        }
+                                    }
+                                }
+                            });
+                            updateStatsUI();
+                        }
+                    }
+
                     lastProcessedEpoch = currentEpoch;
                     runLiveAnalysis();
                 }
@@ -409,23 +458,11 @@ function connectToDerivAPI() {
 
                     const profit = parseFloat(contract.profit);
                     let status = "BREAKEVEN";
-                    let isWin = null;
 
                     if (profit > 0) {
                         status = "WIN";
-                        isWin = true;
-                        realSessionTP++;
                     } else if (profit < 0) {
                         status = "LOSS";
-                        isWin = false;
-                        realSessionSL++;
-                    }
-                    
-                    if (pos.signalId) {
-                        const wsItem = windowSignals.find(s => s.id === pos.signalId);
-                        if (wsItem) {
-                            wsItem.result = isWin;
-                        }
                     }
 
                     const profitText = (profit > 0 ? "+" : "") + profit.toFixed(2);
