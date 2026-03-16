@@ -143,8 +143,6 @@ async function analyzeHistoryBatch() {
 
     for (let i = startIndex; i <= lastSafeIndex; i++) {
         const currentCandle = liveCandles[i];
-        const nextCandle = liveCandles[i + 1];
-
         const pastSubset = liveCandles.slice(0, i + 1);
         const result = await getAiPrediction(pastSubset);
         
@@ -153,15 +151,19 @@ async function analyzeHistoryBatch() {
 
         if (result && (result.signal === "BUY" || result.signal === "SELL")) {
             const conf = parseFloat(result.confidence || 100);
+            const target = result.target ? parseInt(result.target) : 1;
+            
             if (conf >= MIN_CONFIDENCE) {
                 finalSignal = result.signal;
                 const entryPrice = parseFloat(currentCandle.close);
-                const exitPrice = parseFloat(nextCandle.close);
-
-                if (finalSignal === "BUY") {
-                    isWin = exitPrice > entryPrice;
-                } else if (finalSignal === "SELL") {
-                    isWin = exitPrice < entryPrice;
+                
+                if (i + target < liveCandles.length) {
+                    const exitPrice = parseFloat(liveCandles[i + target].close);
+                    if (finalSignal === "BUY") {
+                        isWin = exitPrice > entryPrice;
+                    } else if (finalSignal === "SELL") {
+                        isWin = exitPrice < entryPrice;
+                    }
                 }
             }
         }
@@ -201,21 +203,22 @@ async function runLiveAnalysis() {
         if (result && result.signal !== undefined) {
             const signal = result.signal;
             const confidence = parseFloat(result.confidence);
+            const target = result.target ? parseInt(result.target) : 1;
             
             const actualStake = parseFloat((BASE_STAKE + (BASE_STAKE * 0.25 * recoveryStep)).toFixed(2));
 
             if ((signal === "BUY" || signal === "SELL") && confidence > MIN_CONFIDENCE && runningPositions.length === 0) {
-                    sendToUI('bot-log', `[BOT] ${signal} (${confidence.toFixed(1)}%) | Price: ${currentPrice} | Stake: ${actualStake.toFixed(2)}`);
+                    sendToUI('bot-log', `[BOT] ${signal} (${confidence.toFixed(1)}%) | Price: ${currentPrice} | Target: ${target} | Stake: ${actualStake.toFixed(2)}`);
                     finalSignal = signal;
 
                     if (isTradingEnabled) {
-                        placeDerivTrade(signal, currentPrice, actualStake, lastCandle.epoch);
+                        placeDerivTrade(signal, currentPrice, actualStake, lastCandle.epoch, target);
                     }
             } else {
                 if (signal === "BUY" || signal === "SELL") {
-                    sendToUI('bot-log', `[FILTER] ${signal} (${confidence.toFixed(1)}%) | Price: ${currentPrice}`);
+                    sendToUI('bot-log', `[FILTER] ${signal} (${confidence.toFixed(1)}%) | Price: ${currentPrice} | Target: ${target} | Stake: ${actualStake.toFixed(2)}`);
                 } else {
-                    sendToUI('bot-log', `[FILTER] HOLD (${confidence.toFixed(1)}%) | Price: ${currentPrice}`);
+                    sendToUI('bot-log', `[FILTER] HOLD (${confidence.toFixed(1)}%) | Price: ${currentPrice} | Target: ${target} | Stake: ${actualStake.toFixed(2)}`);
                 }
             }
         }
@@ -465,8 +468,6 @@ function connectToDerivAPI() {
                 runningPositions.push({ reqId: reqId || null, id: contractId, signalId: null, type: "UNKNOWN" });
             }
             
-            ws.send(JSON.stringify({ "proposal_open_contract": 1, "contract_id": contractId, "subscribe": 1 }));
-            
             sendToUI('bot-log', `[DERIV] Order Filled | ID: ${contractId}`);
         }
     });
@@ -489,12 +490,12 @@ function connectToDerivAPI() {
     });
 }
 
-function placeDerivTrade(signal, entryPrice, stake, signalId) {
+function placeDerivTrade(signal, entryPrice, stake, signalId, targetCandles) {
     if (!ws) return;
 
     const reqId = Date.now() + Math.floor(Math.random() * 1000);
     const contractType = (signal === "BUY") ? "CALL" : "PUT";
-    const durationMinutes = TRADING_TIMEFRAME_MIN;
+    const durationMinutes = TRADING_TIMEFRAME_MIN * targetCandles;
 
     runningPositions.push({ reqId: reqId, id: null, signalId: signalId, type: "UNKNOWN" });
 
@@ -512,7 +513,7 @@ function placeDerivTrade(signal, entryPrice, stake, signalId) {
         },
         "req_id": reqId
     }));
-    sendToUI('bot-log', `[ENTRY] ${contractType} | Price: ${entryPrice} | Stake: ${stake.toFixed(2)}`);
+    sendToUI('bot-log', `[ENTRY] ${contractType} | Price: ${entryPrice} | Target: ${targetCandles} | Stake: ${stake.toFixed(2)}`);
 }
 
 function startDerivBot() { 
