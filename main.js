@@ -13,16 +13,14 @@ const ICON_PATH = path.join(PUBLIC_DIR, 'icon.ico');
 const INDEX_PATH = path.join(PUBLIC_DIR, 'index.html');
 const ENGINE_PATH = path.join(RESOURCES_PATH, 'bin', 'engine.exe');
 
-const SYMBOL = "R_100";
-const DERIV_APP_ID = 120975;
 const DERIV_TOKEN = "S4B3gsvNAwpnHEQ";
 const TRADING_TIMEFRAME_MIN = 1;
+const DERIV_APP_ID = 120975;
 const HISTORY_COUNT = 4000;
 const STATS_WINDOW = 100;
-
 const BASE_STAKE = 0.40;
-const MIN_CONFIDENCE = 50;
-const MAX_DRAWDOWN = 100;
+const MAX_DRAWDOWN = 80;
+const SYMBOL = "R_100";
 
 let mainWindow;
 let ws = null;
@@ -150,20 +148,16 @@ async function analyzeHistoryBatch() {
         let isWin = null;
 
         if (result && (result.signal === "BUY" || result.signal === "SELL")) {
-            const conf = parseFloat(result.confidence || 100);
             const target = result.target ? parseInt(result.target) : 1;
+            finalSignal = result.signal;
+            const entryPrice = parseFloat(currentCandle.close);
             
-            if (conf >= MIN_CONFIDENCE) {
-                finalSignal = result.signal;
-                const entryPrice = parseFloat(currentCandle.close);
-                
-                if (i + target < liveCandles.length) {
-                    const exitPrice = parseFloat(liveCandles[i + target].close);
-                    if (finalSignal === "BUY") {
-                        isWin = exitPrice > entryPrice;
-                    } else if (finalSignal === "SELL") {
-                        isWin = exitPrice < entryPrice;
-                    }
+            if (i + target < liveCandles.length) {
+                const exitPrice = parseFloat(liveCandles[i + target].close);
+                if (finalSignal === "BUY") {
+                    isWin = exitPrice > entryPrice;
+                } else if (finalSignal === "SELL") {
+                    isWin = exitPrice < entryPrice;
                 }
             }
         }
@@ -202,13 +196,13 @@ async function runLiveAnalysis() {
 
         if (result && result.signal !== undefined) {
             const signal = result.signal;
-            const confidence = parseFloat(result.confidence);
+            const confidence = parseFloat(result.confidence || 0);
             const target = result.target ? parseInt(result.target) : 1;
             
             const actualStake = parseFloat((BASE_STAKE + (BASE_STAKE * 0.25 * recoveryStep)).toFixed(2));
 
-            if ((signal === "BUY" || signal === "SELL") && confidence > MIN_CONFIDENCE && runningPositions.length === 0) {
-                    sendToUI('bot-log', `[BOT] ${signal} (${confidence.toFixed(1)}%) | Price: ${currentPrice} | Target: ${target} | Stake: ${actualStake.toFixed(2)}`);
+            if ((signal === "BUY" || signal === "SELL") && runningPositions.length === 0) {
+                    sendToUI('bot-log', `[BOT] ${signal} (${confidence.toFixed(1)}%) | Price: ${currentPrice.toFixed(2)} | Target: ${target} | Stake: ${actualStake.toFixed(2)}`);
                     finalSignal = signal;
 
                     if (isTradingEnabled) {
@@ -216,9 +210,9 @@ async function runLiveAnalysis() {
                     }
             } else {
                 if (signal === "BUY" || signal === "SELL") {
-                    sendToUI('bot-log', `[FILTER] ${signal} (${confidence.toFixed(1)}%) | Price: ${currentPrice} | Target: ${target} | Stake: ${actualStake.toFixed(2)}`);
+                    sendToUI('bot-log', `[FILTER] ${signal} (${confidence.toFixed(1)}%) | Price: ${currentPrice.toFixed(2)} | Target: ${target} | Stake: ${actualStake.toFixed(2)}`);
                 } else {
-                    sendToUI('bot-log', `[FILTER] HOLD (${confidence.toFixed(1)}%) | Price: ${currentPrice} | Target: ${target} | Stake: ${actualStake.toFixed(2)}`);
+                    sendToUI('bot-log', `[FILTER] HOLD (${confidence.toFixed(1)}%) | Price: ${currentPrice.toFixed(2)} | Target: ${target} | Stake: ${actualStake.toFixed(2)}`);
                 }
             }
         }
@@ -529,7 +523,7 @@ function placeDerivTrade(signal, entryPrice, stake, signalId, targetCandles) {
         },
         "req_id": reqId
     }));
-    sendToUI('bot-log', `[ENTRY] ${contractType} | Price: ${entryPrice} | Target: ${targetCandles} | Stake: ${stake.toFixed(2)}`);
+    sendToUI('bot-log', `[ENTRY] ${contractType} | Price: ${entryPrice.toFixed(2)} | Target: ${targetCandles} | Stake: ${stake.toFixed(2)}`);
 }
 
 function startDerivBot() { 
