@@ -225,7 +225,7 @@ async function runLiveAnalysis() {
             const actualStake = parseFloat((BASE_STAKE + (BASE_STAKE * 0.25 * recoveryStep)).toFixed(2));
 
             if ((signal === "BUY" || signal === "SELL") && lastCandle.epoch >= systemLockEpoch) {
-                sendToUI('bot-log', `[BOT] ${signal} (${confidence.toFixed(1)}%) | Price: ${currentPrice.toFixed(2)} | Target: ${target} | Stake: ${actualStake.toFixed(2)}`);
+                sendToUI('bot-log', `[BOT] ${signal} (${confidence.toFixed(1)}%) | Price: ${currentPrice.toFixed(2)} | Stake: ${actualStake.toFixed(2)}`);
                 finalSignal = signal;
                 targetEpoch = tempTargetEpoch;
                 systemLockEpoch = targetEpoch + (TRADING_TIMEFRAME_MIN * 60);
@@ -236,9 +236,9 @@ async function runLiveAnalysis() {
                 }
             } else {
                 if (signal === "BUY" || signal === "SELL") {
-                    sendToUI('bot-log', `[FILTER] ${signal} (${confidence.toFixed(1)}%) | Price: ${currentPrice.toFixed(2)} | Target: ${target} | Stake: ${actualStake.toFixed(2)}`);
+                    sendToUI('bot-log', `[FILTER] ${signal} (${confidence.toFixed(1)}%) | Price: ${currentPrice.toFixed(2)} | Stake: ${actualStake.toFixed(2)}`);
                 } else {
-                    sendToUI('bot-log', `[FILTER] HOLD (${confidence.toFixed(1)}%) | Price: ${currentPrice.toFixed(2)} | Target: ${target} | Stake: ${actualStake.toFixed(2)}`);
+                    sendToUI('bot-log', `[FILTER] HOLD (${confidence.toFixed(1)}%) | Price: ${currentPrice.toFixed(2)} | Stake: ${actualStake.toFixed(2)}`);
                 }
             }
         } else {
@@ -561,7 +561,7 @@ function placeDerivTrade(signal, entryPrice, stake, signalId, targetCandles) {
         },
         "req_id": reqId
     }));
-    sendToUI('bot-log', `[ENTRY] ${contractType} | Price: ${entryPrice.toFixed(2)} | Target: ${targetCandles} | Stake: ${stake.toFixed(2)}`);
+    sendToUI('bot-log', `[ENTRY] ${contractType} | Price: ${entryPrice.toFixed(2)} | Stake: ${stake.toFixed(2)}`);
 }
 
 function startDerivBot() { 
