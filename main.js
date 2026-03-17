@@ -413,12 +413,19 @@ function connectToDerivAPI() {
                                            if (currentStake < 0.35) currentStake = 0.35;
                                         } else {
                                             realSessionSL++;
-                                            if (currentStake < 0.49) {
-                                                currentStake += 0.05;
+                                            if (currentStake >= 1.00) {
+                                                isTradingEnabled = false;
+                                                isCircuitTripped = true;
+                                                sendToUI('bot-log', 'TRADING PAUSED. AI logic cancelling...');
+                                                sendToUI('stop-triggered', true);
                                             } else {
-                                                currentStake += 0.10;
+                                                if (currentStake < 0.49) {
+                                                    currentStake += 0.05;
+                                                } else {
+                                                    currentStake += 0.10;
+                                                }
+                                                if (currentStake > 1.00) currentStake = 1.00;
                                             }
-                                            if (currentStake > 1.00) currentStake = 1.00;
                                         }
                                         currentStake = Math.round(currentStake * 100) / 100;
                                     }
