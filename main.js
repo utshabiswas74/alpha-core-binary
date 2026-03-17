@@ -18,8 +18,7 @@ const TRADING_TIMEFRAME_MIN = 10;
 const DERIV_APP_ID = 120975;
 const HISTORY_COUNT = 4000;
 const STATS_WINDOW = 100;
-const BASE_STAKE = 0.40;
-const MAX_DRAWDOWN = 80;
+const BASE_STAKE = 0.50;
 const SYMBOL = "R_100";
 
 let mainWindow;
@@ -43,6 +42,7 @@ let runningPositions = [];
 
 let realSessionTP = 0;
 let realSessionSL = 0;
+let currentStake = BASE_STAKE;
 
 let sessionStats = {
     balance: 0.00,
@@ -219,7 +219,7 @@ async function runLiveAnalysis() {
             const target = result.target ? parseInt(result.target) : 1;
             const tempTargetEpoch = lastCandle.epoch + (target * TRADING_TIMEFRAME_MIN * 60);
             
-            const actualStake = BASE_STAKE;
+            let actualStake = currentStake;
 
             if ((signal === "BUY" || signal === "SELL") && lastCandle.epoch >= systemLockEpoch) {
                 sendToUI('bot-log', `[BOT] ${signal} (${confidence.toFixed(1)}%) | Price: ${currentPrice.toFixed(2)} | Stake: ${actualStake.toFixed(2)}`);
@@ -266,6 +266,7 @@ function stopDerivBot() {
     systemLockEpoch = 0;
     isAnalyzingHistory = false;
     isRunningLive = false;
+    currentStake = BASE_STAKE;
     runningPositions = [];
     if (ws) {
         ws.terminate();
@@ -357,13 +358,6 @@ function connectToDerivAPI() {
                 sessionStats.totalProfit = sessionStats.balance - initialBalance;
             }
 
-            if (initialBalance !== null && (initialBalance - sessionStats.balance) >= MAX_DRAWDOWN && !isCircuitTripped && isTradingEnabled) {
-                isCircuitTripped = true;
-                isTradingEnabled = false;
-                sendToUI('bot-log', `TRADING PAUSED. AI logic cancelling...`);
-                sendToUI('stop-triggered', true);
-            }
-
             updateStatsUI();
         }
 
@@ -410,10 +404,23 @@ function connectToDerivAPI() {
 
                                     if (s.isRealTrade && s.result !== null) {
                                         if (s.result === true) {
-                                            realSessionTP++;
+                                           realSessionTP++;
+                                           if (currentStake > 0.51) {
+                                               currentStake -= 0.10;
+                                           } else {
+                                               currentStake -= 0.05;
+                                           }
+                                           if (currentStake < 0.35) currentStake = 0.35;
                                         } else {
                                             realSessionSL++;
+                                            if (currentStake < 0.49) {
+                                                currentStake += 0.05;
+                                            } else {
+                                                currentStake += 0.10;
+                                            }
+                                            if (currentStake > 1.00) currentStake = 1.00;
                                         }
+                                        currentStake = Math.round(currentStake * 100) / 100;
                                     }
                                 }
                             });
@@ -553,6 +560,7 @@ function startDerivBot() {
 ipcMain.on('toggle-trading-logic', (e, isActive) => {
     if (isActive && isCircuitTripped) {
         isCircuitTripped = false;
+        currentStake = BASE_STAKE;
         initialBalance = sessionStats.balance;
     }
     isTradingEnabled = isActive;
