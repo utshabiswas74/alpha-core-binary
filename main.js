@@ -14,7 +14,7 @@ const INDEX_PATH = path.join(PUBLIC_DIR, 'index.html');
 const ENGINE_PATH = path.join(RESOURCES_PATH, 'bin', 'engine.exe');
 
 const DERIV_TOKEN = "S4B3gsvNAwpnHEQ";
-const TRADING_TIMEFRAME_MIN = 1;
+const TRADING_TIMEFRAME_MIN = 10;
 const DERIV_APP_ID = 120975;
 const HISTORY_COUNT = 4000;
 const STATS_WINDOW = 100;

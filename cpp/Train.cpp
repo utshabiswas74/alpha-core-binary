@@ -97,8 +97,10 @@ int main(int argc, char* argv[]) {
         int targetIdx = i + Config::TARGET_CANDLES;
         double targetClose = closes[targetIdx];
 
-        double bLabel = (targetClose > currentClose) ? 1.0 : 0.0;
-        double sLabel = (targetClose < currentClose) ? 1.0 : 0.0;
+        double movePct = ((targetClose - currentClose) / currentClose) * 100.0;
+
+        double bLabel = (movePct > Config::MIN_MOVEMENT_PCT) ? 1.0 : 0.0;
+        double sLabel = (movePct < -Config::MIN_MOVEMENT_PCT) ? 1.0 : 0.0;
 
         allBuyLabels[i] = bLabel;
         allSellLabels[i] = sLabel;
