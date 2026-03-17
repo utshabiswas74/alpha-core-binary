@@ -158,7 +158,7 @@ async function analyzeHistoryBatch() {
             if (currentCandle.epoch >= systemLockEpoch) {
                 finalSignal = result.signal;
                 targetEpoch = tempTargetEpoch;
-                systemLockEpoch = targetEpoch + (TRADING_TIMEFRAME_MIN * 60);
+                systemLockEpoch = targetEpoch;
                 
                 if (i + target < liveCandles.length) {
                     const exitPrice = parseFloat(liveCandles[i + target].close);
@@ -228,7 +228,7 @@ async function runLiveAnalysis() {
                 sendToUI('bot-log', `[BOT] ${signal} (${confidence.toFixed(1)}%) | Price: ${currentPrice.toFixed(2)} | Stake: ${actualStake.toFixed(2)}`);
                 finalSignal = signal;
                 targetEpoch = tempTargetEpoch;
-                systemLockEpoch = targetEpoch + (TRADING_TIMEFRAME_MIN * 60);
+                systemLockEpoch = targetEpoch;
 
                 if (isTradingEnabled) {
                     isRealTrade = true;
