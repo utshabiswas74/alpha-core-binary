@@ -36,9 +36,6 @@ let isRunningLive = false;
 
 let lastProcessedEpoch = 0;
 let initialBalance = null;
-let targetBalance = null;
-let accumulatedLoss = 0.00;
-let recoveryStep = 0;
 let systemLockEpoch = 0;
 
 let windowSignals = [];
@@ -222,7 +219,7 @@ async function runLiveAnalysis() {
             const target = result.target ? parseInt(result.target) : 1;
             const tempTargetEpoch = lastCandle.epoch + (target * TRADING_TIMEFRAME_MIN * 60);
             
-            const actualStake = parseFloat((BASE_STAKE + (BASE_STAKE * 0.25 * recoveryStep)).toFixed(2));
+            const actualStake = BASE_STAKE;
 
             if ((signal === "BUY" || signal === "SELL") && lastCandle.epoch >= systemLockEpoch) {
                 sendToUI('bot-log', `[BOT] ${signal} (${confidence.toFixed(1)}%) | Price: ${currentPrice.toFixed(2)} | Stake: ${actualStake.toFixed(2)}`);
@@ -266,9 +263,6 @@ function stopDerivBot() {
     isTradingEnabled = false;
     isSystemReady = false;
     initialBalance = null;
-    targetBalance = null;
-    accumulatedLoss = 0.00;
-    recoveryStep = 0;
     systemLockEpoch = 0;
     isAnalyzingHistory = false;
     isRunningLive = false;
@@ -337,7 +331,6 @@ function connectToDerivAPI() {
             sessionStats.balance = parseFloat(msg.authorize.balance);
             if (initialBalance === null) {
                 initialBalance = sessionStats.balance;
-                targetBalance = sessionStats.balance;
             }
             sessionStats.totalProfit = sessionStats.balance - initialBalance;
             updateStatsUI();
@@ -362,18 +355,6 @@ function connectToDerivAPI() {
             
             if (initialBalance !== null) {
                 sessionStats.totalProfit = sessionStats.balance - initialBalance;
-
-                if (sessionStats.balance >= targetBalance) {
-                    targetBalance = sessionStats.balance;
-                    accumulatedLoss = 0;
-                    recoveryStep = 0;
-                } else {
-                    let currentLoss = parseFloat((targetBalance - sessionStats.balance).toFixed(2));
-                    if (currentLoss > accumulatedLoss) {
-                        recoveryStep++;
-                        accumulatedLoss = currentLoss;
-                    }
-                }
             }
 
             if (initialBalance !== null && (initialBalance - sessionStats.balance) >= MAX_DRAWDOWN && !isCircuitTripped && isTradingEnabled) {
@@ -573,7 +554,6 @@ ipcMain.on('toggle-trading-logic', (e, isActive) => {
     if (isActive && isCircuitTripped) {
         isCircuitTripped = false;
         initialBalance = sessionStats.balance;
-        targetBalance = sessionStats.balance;
     }
     isTradingEnabled = isActive;
 });
