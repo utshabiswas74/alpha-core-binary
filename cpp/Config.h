@@ -43,7 +43,7 @@ namespace Config {
 
     const int TARGET_CANDLES = 1;
     const int MAX_ENSEMBLE_MODELS = 4;
-    const double MIN_MOVEMENT_PCT = 0.01;
+    const double MIN_MOVEMENT_PCT = 0.11;
     const std::string MODEL_FILE_BASE = "data/model_brain";
     const std::string TRAIN_DATA_FILE = "data/training_data.csv";
 }

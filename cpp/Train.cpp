@@ -97,22 +97,27 @@ int main(int argc, char* argv[]) {
         int targetIdx = i + Config::TARGET_CANDLES;
         double targetClose = closes[targetIdx];
 
-        double movePct = ((targetClose - currentClose) / currentClose) * 100.0;
-
-        double bLabel = (movePct > Config::MIN_MOVEMENT_PCT) ? 1.0 : 0.0;
-        double sLabel = (movePct < -Config::MIN_MOVEMENT_PCT) ? 1.0 : 0.0;
-
-        allBuyLabels[i] = bLabel;
-        allSellLabels[i] = sLabel;
+        double bLabel = 0.0;
+        double sLabel = 0.0;
 
         if (i < trainSize) {
+            double movePct = ((targetClose - currentClose) / currentClose) * 100.0;
+            bLabel = (movePct > Config::MIN_MOVEMENT_PCT) ? 1.0 : 0.0;
+            sLabel = (movePct < -Config::MIN_MOVEMENT_PCT) ? 1.0 : 0.0;
+            
             trainIndices.push_back(i);
             if (bLabel == 1.0) buyWins++;
             if (sLabel == 1.0) sellWins++;
             totalTrain++;
         } else {
+            bLabel = (targetClose > currentClose) ? 1.0 : 0.0;
+            sLabel = (targetClose < currentClose) ? 1.0 : 0.0;
+            
             valIndices.push_back(i);
         }
+
+        allBuyLabels[i] = bLabel;
+        allSellLabels[i] = sLabel;
     }
 
     if (totalTrain == 0) return 1;
