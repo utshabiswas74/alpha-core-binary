@@ -19,7 +19,7 @@ const DERIV_APP_ID = 120975;
 const HISTORY_COUNT = 4000;
 const STATS_WINDOW = 100;
 const BASE_STAKE = 0.50;
-const SYMBOL = "R_100";
+const SYMBOL = "R_75";
 
 let mainWindow;
 let ws = null;
@@ -222,14 +222,42 @@ async function runLiveAnalysis() {
             let actualStake = currentStake;
 
             if ((signal === "BUY" || signal === "SELL") && lastCandle.epoch >= systemLockEpoch) {
-                sendToUI('bot-log', `[BOT] ${signal} (${confidence.toFixed(1)}%) | Price: ${currentPrice.toFixed(2)} | Stake: ${actualStake.toFixed(2)}`);
+                const vTrades = windowSignals.filter(s => (s.signal === 'BUY' || s.signal === 'SELL') && s.result !== null);
+                const n = vTrades.length;
+                
+                let wWins = 0;
+                let wTotal = 0;
+                
+                const b1 = vTrades.slice(Math.max(0, n - 10));
+                wWins += b1.filter(t => t.result === true).length * 4;
+                wTotal += b1.length * 4;
+                
+                const b2 = vTrades.slice(Math.max(0, n - 30), Math.max(0, n - 10));
+                wWins += b2.filter(t => t.result === true).length * 3;
+                wTotal += b2.length * 3;
+                
+                const b3 = vTrades.slice(Math.max(0, n - 60), Math.max(0, n - 30));
+                wWins += b3.filter(t => t.result === true).length * 2;
+                wTotal += b3.length * 2;
+                
+                const b4 = vTrades.slice(Math.max(0, n - 100), Math.max(0, n - 60));
+                wWins += b4.filter(t => t.result === true).length * 1;
+                wTotal += b4.length * 1;
+
+                const weightedAccuracy = wTotal > 0 ? (wWins / wTotal) * 100 : 100;
+
                 finalSignal = signal;
                 targetEpoch = tempTargetEpoch;
                 systemLockEpoch = targetEpoch;
 
-                if (isTradingEnabled) {
-                    isRealTrade = true;
-                    placeDerivTrade(signal, currentPrice, actualStake, lastCandle.epoch, target);
+                if (weightedAccuracy > 50) {
+                    sendToUI('bot-log', `[BOT] ${signal} (${confidence.toFixed(1)}%) | Price: ${currentPrice.toFixed(2)} | Stake: ${actualStake.toFixed(2)}`);
+                    if (isTradingEnabled) {
+                        isRealTrade = true;
+                        placeDerivTrade(signal, currentPrice, actualStake, lastCandle.epoch, target);
+                    }
+                } else {
+                    sendToUI('bot-log', `[FILTER] ${signal} (${confidence.toFixed(1)}%) | Price: ${currentPrice.toFixed(2)} | Stake: ${actualStake.toFixed(2)}`);
                 }
             } else {
                 if (signal === "BUY" || signal === "SELL") {
