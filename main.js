@@ -16,8 +16,8 @@ const ENGINE_PATH = path.join(RESOURCES_PATH, 'bin', 'engine.exe');
 const DERIV_TOKEN = "S4B3gsvNAwpnHEQ";
 const TRADING_TIMEFRAME_MIN = 10;
 const DERIV_APP_ID = 120975;
-const HISTORY_COUNT = 4000;
-const STATS_WINDOW = 100;
+const HISTORY_COUNT = 5000;
+const STATS_WINDOW = 500;
 const BASE_STAKE = 0.50;
 const SYMBOL = "R_75";
 
@@ -85,7 +85,7 @@ function formatTime(epoch) {
 
 function getAiPrediction(candleSubset) {
     return new Promise((resolve) => {
-        if (candleSubset.length < 2048) { resolve(null); return; }
+        if (candleSubset.length < 4096) { resolve(null); return; }
 
         let csvData = "";
         
@@ -124,7 +124,7 @@ function getAiPrediction(candleSubset) {
 
 async function analyzeHistoryBatch() {
     if (isAnalyzingHistory) return;
-    if (liveCandles.length < 2048) return;
+    if (liveCandles.length < 4096) return;
     
     isAnalyzingHistory = true;
 
@@ -200,7 +200,7 @@ async function analyzeHistoryBatch() {
 }
 
 async function runLiveAnalysis() {
-    if (!isSystemReady || liveCandles.length < 2048) return;
+    if (!isSystemReady || liveCandles.length < 4096) return;
     if (isRunningLive) return;
     isRunningLive = true;
 
