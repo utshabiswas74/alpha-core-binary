@@ -42,11 +42,11 @@ namespace Config {
     const int IDX_BB_PCT = 14;
 
     const int TARGET_CANDLES = 1;
-    const int MAX_ENSEMBLE_MODELS = 4;
+    const int MAX_ENSEMBLE_MODELS = 3;
     const int TIMEFRAME_MULTIPLIER = 6;
-    const double MIN_MOVEMENT_PCT = 0.11;
-    const std::string MODEL_FILE_BASE = "data/model_brain_main";
-    const std::string MODEL_FILE_EXTRA = "data/model_brain_extra";
+    const double MIN_MOVEMENT_PCT = 0.01;
+    const std::string MODEL_FILE_BASE = "data/main_brain/model_brain";
+    const std::string MODEL_FILE_EXTRA = "data/extra_brain/model_brain";
     const std::string TRAIN_DATA_FILE = "data/training_data.csv";
 }
 

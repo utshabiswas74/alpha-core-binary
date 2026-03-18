@@ -271,7 +271,7 @@ int main(int argc, char* argv[]) {
                   << "Sell_Val: " << std::setprecision(2) << sValAcc << "%";
 
         if (epoch > 4) {
-            if (bValAcc > bestBuyAcc) {
+            if (bValAcc > bestBuyAcc && bGiven > 9) {
                 bestBuyAcc = bValAcc;
                 std::ofstream file(outputBuyFile, std::ios::binary);
                 if (file.is_open()) {
@@ -280,7 +280,7 @@ int main(int argc, char* argv[]) {
                     std::cout << " [BUY SAVED]";
                 }
             }
-            if (sValAcc > bestSellAcc) {
+            if (sValAcc > bestSellAcc && sGiven > 9) {
                 bestSellAcc = sValAcc;
                 std::ofstream file(outputSellFile, std::ios::binary);
                 if (file.is_open()) {
