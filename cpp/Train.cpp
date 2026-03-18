@@ -75,14 +75,19 @@ int main(int argc, char* argv[]) {
     
     if (history.size() < config.inputTimeSteps + 100) return 1;
 
+    std::vector<Candle> haHistory;
+    std::vector<double> haCloses;
+    std::cout << "Converting to Smoothed Heikin-Ashi..." << std::endl;
+    Utils::convertToHeikinAshi(history, haHistory, haCloses);
+
     int valSize = static_cast<int>(history.size() * 0.10);
 
     std::cout << "Calculating indicators..." << std::endl;
-    std::vector<double> rsi = Utils::calculateRSI(closes, 9);
-    std::vector<double> ema20 = Utils::calculateEMA(closes, 20);
-    std::vector<double> atr = Utils::calculateATR(history, 14);
-    std::vector<double> adx = Utils::calculateADX(history, 14);
-    std::vector<double> bbPct = Utils::calculateBB_PctB(closes, 20, 2.0);
+    std::vector<double> rsi = Utils::calculateRSI(haCloses, 9);
+    std::vector<double> ema20 = Utils::calculateEMA(haCloses, 20);
+    std::vector<double> atr = Utils::calculateATR(haHistory, 14);
+    std::vector<double> adx = Utils::calculateADX(haHistory, 14);
+    std::vector<double> bbPct = Utils::calculateBB_PctB(haCloses, 20, 2.0);
 
     int trainSize = std::max(0, (int)history.size() - valSize);
     std::vector<int> trainIndices, valIndices;
@@ -100,8 +105,9 @@ int main(int argc, char* argv[]) {
         double bLabel = 0.0;
         double sLabel = 0.0;
 
+        double movePct = ((targetClose - currentClose) / currentClose) * 100.0;
+
         if (i < trainSize) {
-            double movePct = ((targetClose - currentClose) / currentClose) * 100.0;
             bLabel = (movePct > Config::MIN_MOVEMENT_PCT) ? 1.0 : 0.0;
             sLabel = (movePct < -Config::MIN_MOVEMENT_PCT) ? 1.0 : 0.0;
             
@@ -140,7 +146,7 @@ int main(int argc, char* argv[]) {
 
     for (size_t i = 0; i < trainIndices.size(); ++i) {
         int idx = trainIndices[i];
-        trainInputs[i] = Utils::generateInputTensor(idx, history, closes, ema20, rsi, atr, adx, bbPct, config.inputTimeSteps, config.inputFeatures);
+        trainInputs[i] = Utils::generateInputTensor(idx, haHistory, haCloses, ema20, rsi, atr, adx, bbPct, config.inputTimeSteps, config.inputFeatures);
         trainBuyTargets[i] = allBuyLabels[idx];
         trainSellTargets[i] = allSellLabels[idx];
     }
@@ -150,7 +156,7 @@ int main(int argc, char* argv[]) {
 
     for (size_t i = 0; i < valIndices.size(); ++i) {
         int idx = valIndices[i];
-        valInputs[i] = Utils::generateInputTensor(idx, history, closes, ema20, rsi, atr, adx, bbPct, config.inputTimeSteps, config.inputFeatures);
+        valInputs[i] = Utils::generateInputTensor(idx, haHistory, haCloses, ema20, rsi, atr, adx, bbPct, config.inputTimeSteps, config.inputFeatures);
         valBuyTargets[i] = allBuyLabels[idx];
         valSellTargets[i] = allSellLabels[idx];
     }

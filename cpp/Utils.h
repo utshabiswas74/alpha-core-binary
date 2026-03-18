@@ -76,6 +76,59 @@ public:
         }
     }
 
+    static void convertToHeikinAshi(const std::vector<Candle>& rawHistory, std::vector<Candle>& haHistory, std::vector<double>& haCloses) {
+        haHistory.clear();
+        haCloses.clear();
+        int n = rawHistory.size();
+        if (n == 0) return;
+
+        int smoothPeriod = 1;
+        std::vector<Candle> smoothed(n);
+        
+        for (int i = 0; i < n; ++i) {
+            if (i < smoothPeriod - 1) {
+                smoothed[i] = rawHistory[i];
+            } else {
+                double sumO = 0, sumH = 0, sumL = 0, sumC = 0;
+                for (int j = 0; j < smoothPeriod; ++j) {
+                    sumO += rawHistory[i - j].open;
+                    sumH += rawHistory[i - j].high;
+                    sumL += rawHistory[i - j].low;
+                    sumC += rawHistory[i - j].close;
+                }
+                smoothed[i].open = sumO / smoothPeriod;
+                smoothed[i].high = sumH / smoothPeriod;
+                smoothed[i].low = sumL / smoothPeriod;
+                smoothed[i].close = sumC / smoothPeriod;
+                smoothed[i].hour = rawHistory[i].hour;
+                smoothed[i].minute = rawHistory[i].minute;
+            }
+        }
+
+        Candle firstHA = smoothed[0];
+        firstHA.close = (smoothed[0].open + smoothed[0].high + smoothed[0].low + smoothed[0].close) / 4.0;
+        firstHA.open = (smoothed[0].open + smoothed[0].close) / 2.0;
+        firstHA.high = smoothed[0].high;
+        firstHA.low = smoothed[0].low;
+
+        haHistory.push_back(firstHA);
+        haCloses.push_back(firstHA.close);
+
+        for (int i = 1; i < n; ++i) {
+            Candle ha;
+            ha.hour = smoothed[i].hour;
+            ha.minute = smoothed[i].minute;
+
+            ha.close = (smoothed[i].open + smoothed[i].high + smoothed[i].low + smoothed[i].close) / 4.0;
+            ha.open = (haHistory[i - 1].open + haHistory[i - 1].close) / 2.0;
+            ha.high = std::max({smoothed[i].high, ha.open, ha.close});
+            ha.low = std::min({smoothed[i].low, ha.open, ha.close});
+
+            haHistory.push_back(ha);
+            haCloses.push_back(ha.close);
+        }
+    }
+
     static std::vector<double> calculateRSI(const std::vector<double>& prices, int period) {
         std::vector<double> rsi(prices.size(), 50.0);
         if (prices.size() <= period) return rsi;

@@ -117,13 +117,17 @@ int main() {
         return 0;
     }
 
-    std::vector<double> rsi = Utils::calculateRSI(closes, 9);
-    std::vector<double> ema20 = Utils::calculateEMA(closes, 20);
-    std::vector<double> atr = Utils::calculateATR(history, 14);
-    std::vector<double> adx = Utils::calculateADX(history, 14);
-    std::vector<double> bbPct = Utils::calculateBB_PctB(closes, 20, 2.0);
+    std::vector<Candle> haHistory;
+    std::vector<double> haCloses;
+    Utils::convertToHeikinAshi(history, haHistory, haCloses);
 
-    int lastIndex = history.size() - 1; 
+    std::vector<double> rsi = Utils::calculateRSI(haCloses, 9);
+    std::vector<double> ema20 = Utils::calculateEMA(haCloses, 20);
+    std::vector<double> atr = Utils::calculateATR(haHistory, 14);
+    std::vector<double> adx = Utils::calculateADX(haHistory, 14);
+    std::vector<double> bbPct = Utils::calculateBB_PctB(haCloses, 20, 2.0);
+
+    int lastIndex = haHistory.size() - 1; 
     double totalBuyPred = 0.0;
     double totalSellPred = 0.0;
     int validModels = 0;
@@ -134,7 +138,7 @@ int main() {
 
         if (lastIndex < steps) continue;
 
-        Tensor input = Utils::generateInputTensor(lastIndex, history, closes, ema20, rsi, atr, adx, bbPct, steps, feats);
+        Tensor input = Utils::generateInputTensor(lastIndex, haHistory, haCloses, ema20, rsi, atr, adx, bbPct, steps, feats);
 
         if (input.depth > 0) {
             totalBuyPred += buyModels[i]->predict(input);
@@ -171,13 +175,17 @@ int main() {
         aggregateCandles(history, Config::TIMEFRAME_MULTIPLIER, extraHistory, extraCloses);
 
         if (extraHistory.size() >= 50) {
-            std::vector<double> extraRsi = Utils::calculateRSI(extraCloses, 9);
-            std::vector<double> extraEma20 = Utils::calculateEMA(extraCloses, 20);
-            std::vector<double> extraAtr = Utils::calculateATR(extraHistory, 14);
-            std::vector<double> extraAdx = Utils::calculateADX(extraHistory, 14);
-            std::vector<double> extraBbPct = Utils::calculateBB_PctB(extraCloses, 20, 2.0);
+            std::vector<Candle> extraHaHistory;
+            std::vector<double> extraHaCloses;
+            Utils::convertToHeikinAshi(extraHistory, extraHaHistory, extraHaCloses);
 
-            int extraLastIndex = extraHistory.size() - 1;
+            std::vector<double> extraRsi = Utils::calculateRSI(extraHaCloses, 9);
+            std::vector<double> extraEma20 = Utils::calculateEMA(extraHaCloses, 20);
+            std::vector<double> extraAtr = Utils::calculateATR(extraHaHistory, 14);
+            std::vector<double> extraAdx = Utils::calculateADX(extraHaHistory, 14);
+            std::vector<double> extraBbPct = Utils::calculateBB_PctB(extraHaCloses, 20, 2.0);
+
+            int extraLastIndex = extraHaHistory.size() - 1;
             double totalExtraBuy = 0.0;
             double totalExtraSell = 0.0;
             int validExtra = 0;
@@ -188,7 +196,7 @@ int main() {
 
                 if (extraLastIndex < steps) continue;
 
-                Tensor input = Utils::generateInputTensor(extraLastIndex, extraHistory, extraCloses, extraEma20, extraRsi, extraAtr, extraAdx, extraBbPct, steps, feats);
+                Tensor input = Utils::generateInputTensor(extraLastIndex, extraHaHistory, extraHaCloses, extraEma20, extraRsi, extraAtr, extraAdx, extraBbPct, steps, feats);
 
                 if (input.depth > 0) {
                     totalExtraBuy += extraBuyModels[i]->predict(input);
