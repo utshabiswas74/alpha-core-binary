@@ -42,12 +42,13 @@ bool fileExists(const std::string& name) {
     return f.good();
 }
 
-std::string getTargetModelFile() {
+void getTargetModelFiles(std::string& buyFile, std::string& sellFile) {
     std::string base = Config::MODEL_FILE_BASE;
     int i = 1;
     while (true) {
-        std::string name = base + "_v" + std::to_string(i) + ".bin";
-        if (!fileExists(name)) return name;
+        buyFile = base + "_buy_v" + std::to_string(i) + ".bin";
+        sellFile = base + "_sell_v" + std::to_string(i) + ".bin";
+        if (!fileExists(buyFile) && !fileExists(sellFile)) return;
         i++;
     }
 }
@@ -57,15 +58,18 @@ int main(int argc, char* argv[]) {
     std::cin.tie(NULL);
 
     Config::ModelConfig config;
-    std::string outputModelFile;
+    std::string outputBuyFile;
+    std::string outputSellFile;
 
     if (argc > 1) {
-        outputModelFile = Config::MODEL_FILE_BASE + "_v" + std::string(argv[1]) + ".bin";
+        outputBuyFile = Config::MODEL_FILE_BASE + "_buy_v" + std::string(argv[1]) + ".bin";
+        outputSellFile = Config::MODEL_FILE_BASE + "_sell_v" + std::string(argv[1]) + ".bin";
     } else {
-        outputModelFile = getTargetModelFile();
+        getTargetModelFiles(outputBuyFile, outputSellFile);
     }
 
-    std::cout << "Target Model File: " << outputModelFile << std::endl;
+    std::cout << "Target Buy Model:  " << outputBuyFile << std::endl;
+    std::cout << "Target Sell Model: " << outputSellFile << std::endl;
 
     std::vector<Candle> history;
     std::vector<double> closes;
@@ -163,26 +167,34 @@ int main(int argc, char* argv[]) {
 
     CNN buyModel(config), sellModel(config);
     double currentLR = Config::LEARNING_RATE;
-    double bestAcc = 0.0;
+    double bestBuyAcc = 0.0;
+    double bestSellAcc = 0.0;
     int timeStep = 0;
 
     if (argc > 1) {
-        std::ifstream f(outputModelFile, std::ios::binary);
-        if (f.is_open() && buyModel.load(f) && sellModel.load(f)) {
+        std::ifstream fBuy(outputBuyFile, std::ios::binary);
+        std::ifstream fSell(outputSellFile, std::ios::binary);
+        
+        bool buyLoaded = fBuy.is_open() && buyModel.load(fBuy);
+        bool sellLoaded = fSell.is_open() && sellModel.load(fSell);
+        
+        if (buyLoaded && sellLoaded) {
             std::cout << "Successfully loaded, Fine-Tuning..." << std::endl;
             currentLR = Config::LEARNING_RATE / 10.0;
             timeStep = 1000;
         } else {
-            std::cout << "ERROR: Failed to load model file!" << std::endl;
+            std::cout << "ERROR: Failed to load model files!" << std::endl;
             return 1;
         }
-        f.close();
+        
+        if (fBuy.is_open()) fBuy.close();
+        if (fSell.is_open()) fSell.close();
     }
 
     std::vector<int> shuffleIdx(trainInputs.size());
     std::iota(shuffleIdx.begin(), shuffleIdx.end(), 0);
 
-    std::cout << "Starting DUAL-MODEL training for Binary Options..." << std::endl;
+    std::cout << "Starting INDEPENDENT DUAL-MODEL training..." << std::endl;
     
     for (int epoch = 1; epoch <= Config::EPOCHS; ++epoch) {
         auto startClock = std::chrono::high_resolution_clock::now();
@@ -249,7 +261,6 @@ int main(int argc, char* argv[]) {
 
         double bValAcc = (bGiven > 0) ? (double)bCorrect / bGiven * 100.0 : 0.0;
         double sValAcc = (sGiven > 0) ? (double)sCorrect / sGiven * 100.0 : 0.0;
-        double avgValAcc = (bValAcc + sValAcc) / 2.0;
         
         auto endClock = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> epochTime = endClock - startClock;
@@ -259,19 +270,29 @@ int main(int argc, char* argv[]) {
                   << "Buy_Val: " << std::setprecision(2) << bValAcc << "% | "
                   << "Sell_Val: " << std::setprecision(2) << sValAcc << "%";
 
-        if (avgValAcc > bestAcc && epoch > 4) {
-            bestAcc = avgValAcc;
-            std::ofstream file(outputModelFile, std::ios::binary);
-            if (file.is_open()) {
-                buyModel.save(file);
-                sellModel.save(file);
-                file.close();
-                std::cout << " [SAVED]";
+        if (epoch > 4) {
+            if (bValAcc > bestBuyAcc) {
+                bestBuyAcc = bValAcc;
+                std::ofstream file(outputBuyFile, std::ios::binary);
+                if (file.is_open()) {
+                    buyModel.save(file);
+                    file.close();
+                    std::cout << " [BUY SAVED]";
+                }
+            }
+            if (sValAcc > bestSellAcc) {
+                bestSellAcc = sValAcc;
+                std::ofstream file(outputSellFile, std::ios::binary);
+                if (file.is_open()) {
+                    sellModel.save(file);
+                    file.close();
+                    std::cout << " [SELL SAVED]";
+                }
             }
         }
         std::cout << std::endl;
     }
 
-    std::cout << "Training complete. Saved to: " << outputModelFile << std::endl;
+    std::cout << "Training complete." << std::endl;
     return 0;
 }

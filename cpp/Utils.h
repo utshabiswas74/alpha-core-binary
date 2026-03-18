@@ -82,7 +82,7 @@ public:
         int n = rawHistory.size();
         if (n == 0) return;
 
-        int smoothPeriod = 1;
+        int smoothPeriod = 3;
         std::vector<Candle> smoothed(n);
         
         for (int i = 0; i < n; ++i) {

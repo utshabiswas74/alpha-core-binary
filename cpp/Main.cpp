@@ -79,29 +79,37 @@ int main() {
     std::vector<std::unique_ptr<CNN>> extraSellModels;
 
     for (int i = 1; i <= Config::MAX_ENSEMBLE_MODELS; ++i) {
-        std::string modelPath = Config::MODEL_FILE_BASE + "_v" + std::to_string(i) + ".bin";
-        std::ifstream f(modelPath, std::ios::binary);
-        if (f.is_open()) {
+        std::string buyPath = Config::MODEL_FILE_BASE + "_buy_v" + std::to_string(i) + ".bin";
+        std::string sellPath = Config::MODEL_FILE_BASE + "_sell_v" + std::to_string(i) + ".bin";
+        std::ifstream fb(buyPath, std::ios::binary);
+        std::ifstream fs(sellPath, std::ios::binary);
+        
+        if (fb.is_open() && fs.is_open()) {
             auto buyCnn = std::make_unique<CNN>();
             auto sellCnn = std::make_unique<CNN>();
-            if (buyCnn->load(f) && sellCnn->load(f)) {
+            if (buyCnn->load(fb) && sellCnn->load(fs)) {
                 buyModels.push_back(std::move(buyCnn));
                 sellModels.push_back(std::move(sellCnn));
             }
-            f.close();
         }
+        if (fb.is_open()) fb.close();
+        if (fs.is_open()) fs.close();
 
-        std::string extraPath = Config::MODEL_FILE_EXTRA + "_v" + std::to_string(i) + ".bin";
-        std::ifstream fe(extraPath, std::ios::binary);
-        if (fe.is_open()) {
+        std::string exBuyPath = Config::MODEL_FILE_EXTRA + "_buy_v" + std::to_string(i) + ".bin";
+        std::string exSellPath = Config::MODEL_FILE_EXTRA + "_sell_v" + std::to_string(i) + ".bin";
+        std::ifstream feb(exBuyPath, std::ios::binary);
+        std::ifstream fes(exSellPath, std::ios::binary);
+        
+        if (feb.is_open() && fes.is_open()) {
             auto buyCnnExtra = std::make_unique<CNN>();
             auto sellCnnExtra = std::make_unique<CNN>();
-            if (buyCnnExtra->load(fe) && sellCnnExtra->load(fe)) {
+            if (buyCnnExtra->load(feb) && sellCnnExtra->load(fes)) {
                 extraBuyModels.push_back(std::move(buyCnnExtra));
                 extraSellModels.push_back(std::move(sellCnnExtra));
             }
-            fe.close();
         }
+        if (feb.is_open()) feb.close();
+        if (fes.is_open()) fes.close();
     }
 
     if (buyModels.empty() || sellModels.empty()) {

@@ -17,8 +17,8 @@ const DERIV_TOKEN = "S4B3gsvNAwpnHEQ";
 const TRADING_TIMEFRAME_MIN = 10;
 const DERIV_APP_ID = 120975;
 const HISTORY_COUNT = 5000;
-const STATS_WINDOW = 500;
-const BASE_STAKE = 0.50;
+const STATS_WINDOW = 100;
+const BASE_STAKE = 1.00;
 const SYMBOL = "R_75";
 
 let mainWindow;
@@ -433,29 +433,9 @@ function connectToDerivAPI() {
                                     if (s.isRealTrade && s.result !== null) {
                                         if (s.result === true) {
                                            realSessionTP++;
-                                           if (currentStake > 0.51) {
-                                               currentStake -= 0.10;
-                                           } else {
-                                               currentStake -= 0.05;
-                                           }
-                                           if (currentStake < 0.35) currentStake = 0.35;
                                         } else {
                                             realSessionSL++;
-                                            if (currentStake >= 1.00) {
-                                                isTradingEnabled = false;
-                                                isCircuitTripped = true;
-                                                sendToUI('bot-log', 'TRADING PAUSED. AI logic cancelling...');
-                                                sendToUI('stop-triggered', true);
-                                            } else {
-                                                if (currentStake < 0.49) {
-                                                    currentStake += 0.05;
-                                                } else {
-                                                    currentStake += 0.10;
-                                                }
-                                                if (currentStake > 1.00) currentStake = 1.00;
-                                            }
                                         }
-                                        currentStake = Math.round(currentStake * 100) / 100;
                                     }
                                 }
                             });
@@ -492,6 +472,15 @@ function connectToDerivAPI() {
                     
                     updateStatsUI();
                     sendToUI('bot-log', `[CLOSED] ${status}: ${profitText} USD | ID: ${contractId}`);
+
+                    if (initialBalance !== null) {
+                        if (sessionStats.totalProfit >= (initialBalance * 0.10) || sessionStats.totalProfit <= -(initialBalance * 0.10)) {
+                            isTradingEnabled = false;
+                            isCircuitTripped = true;
+                            sendToUI('bot-log', 'TRADING PAUSED. AI logic cancelling...');
+                            sendToUI('stop-triggered', true);
+                        }
+                    }
                 }
             } else {
                 let existing = runningPositions.find(p => p.id === contractId);
