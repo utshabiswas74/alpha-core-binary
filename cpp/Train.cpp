@@ -183,8 +183,7 @@ int main(int argc, char* argv[]) {
             currentLR = Config::LEARNING_RATE / 10.0;
             timeStep = 1000;
         } else {
-            std::cout << "ERROR: Failed to load model files!" << std::endl;
-            return 1;
+            std::cout << "Model files not found, starting fresh training..." << std::endl;
         }
         
         if (fBuy.is_open()) fBuy.close();
