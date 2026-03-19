@@ -41,10 +41,14 @@ namespace Config {
     const int IDX_PRICE_POS = 13;
     const int IDX_BB_PCT = 14;
 
-    const int TARGET_CANDLES = 1;
-    const int MAX_ENSEMBLE_MODELS = 2;
-    const int TIMEFRAME_MULTIPLIER = 3;
+    const int TARGET_CANDLES = 4;
+    const int MAX_ENSEMBLE_MODELS = 4;
+    const int TIMEFRAME_MULTIPLIER = 6;
     const double MIN_MOVEMENT_PCT = 0.01;
+    
+    const double KALMAN_PROCESS_NOISE = 1e-4;
+    const double KALMAN_MEASUREMENT_NOISE = 1e-2;
+
     const std::string MODEL_FILE_BASE = "data/main_brain/model_brain";
     const std::string MODEL_FILE_EXTRA = "data/extra_brain/model_brain";
     const std::string TRAIN_DATA_FILE = "data/training_data.csv";

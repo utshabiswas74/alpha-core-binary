@@ -76,56 +76,56 @@ public:
         }
     }
 
-    static void convertToHeikinAshi(const std::vector<Candle>& rawHistory, std::vector<Candle>& haHistory, std::vector<double>& haCloses) {
-        haHistory.clear();
-        haCloses.clear();
+    static void applyKalmanFilter(const std::vector<Candle>& rawHistory, std::vector<Candle>& kalmanHistory, std::vector<double>& kalmanCloses) {
+        kalmanHistory.clear();
+        kalmanCloses.clear();
         int n = rawHistory.size();
         if (n == 0) return;
 
-        int smoothPeriod = 3;
-        std::vector<Candle> smoothed(n);
-        
+        kalmanHistory.reserve(n);
+        kalmanCloses.reserve(n);
+
+        double q = Config::KALMAN_PROCESS_NOISE;
+        double r = Config::KALMAN_MEASUREMENT_NOISE;
+
+        double x_o = rawHistory[0].open;
+        double x_h = rawHistory[0].high;
+        double x_l = rawHistory[0].low;
+        double x_c = rawHistory[0].close;
+
+        double p_o = 1.0, p_h = 1.0, p_l = 1.0, p_c = 1.0;
+
         for (int i = 0; i < n; ++i) {
-            if (i < smoothPeriod - 1) {
-                smoothed[i] = rawHistory[i];
-            } else {
-                double sumO = 0, sumH = 0, sumL = 0, sumC = 0;
-                for (int j = 0; j < smoothPeriod; ++j) {
-                    sumO += rawHistory[i - j].open;
-                    sumH += rawHistory[i - j].high;
-                    sumL += rawHistory[i - j].low;
-                    sumC += rawHistory[i - j].close;
-                }
-                smoothed[i].open = sumO / smoothPeriod;
-                smoothed[i].high = sumH / smoothPeriod;
-                smoothed[i].low = sumL / smoothPeriod;
-                smoothed[i].close = sumC / smoothPeriod;
-                smoothed[i].hour = rawHistory[i].hour;
-                smoothed[i].minute = rawHistory[i].minute;
-            }
-        }
+            p_o += q;
+            p_h += q;
+            p_l += q;
+            p_c += q;
 
-        Candle firstHA = smoothed[0];
-        firstHA.close = (smoothed[0].open + smoothed[0].high + smoothed[0].low + smoothed[0].close) / 4.0;
-        firstHA.open = (smoothed[0].open + smoothed[0].close) / 2.0;
-        firstHA.high = smoothed[0].high;
-        firstHA.low = smoothed[0].low;
+            double k_o = p_o / (p_o + r);
+            double k_h = p_h / (p_h + r);
+            double k_l = p_l / (p_l + r);
+            double k_c = p_c / (p_c + r);
 
-        haHistory.push_back(firstHA);
-        haCloses.push_back(firstHA.close);
+            x_o += k_o * (rawHistory[i].open - x_o);
+            x_h += k_h * (rawHistory[i].high - x_h);
+            x_l += k_l * (rawHistory[i].low - x_l);
+            x_c += k_c * (rawHistory[i].close - x_c);
 
-        for (int i = 1; i < n; ++i) {
-            Candle ha;
-            ha.hour = smoothed[i].hour;
-            ha.minute = smoothed[i].minute;
+            p_o *= (1.0 - k_o);
+            p_h *= (1.0 - k_h);
+            p_l *= (1.0 - k_l);
+            p_c *= (1.0 - k_c);
 
-            ha.close = (smoothed[i].open + smoothed[i].high + smoothed[i].low + smoothed[i].close) / 4.0;
-            ha.open = (haHistory[i - 1].open + haHistory[i - 1].close) / 2.0;
-            ha.high = std::max({smoothed[i].high, ha.open, ha.close});
-            ha.low = std::min({smoothed[i].low, ha.open, ha.close});
+            Candle k_candle;
+            k_candle.open = x_o;
+            k_candle.close = x_c;
+            k_candle.high = std::max({x_h, x_o, x_c});
+            k_candle.low = std::min({x_l, x_o, x_c});
+            k_candle.hour = rawHistory[i].hour;
+            k_candle.minute = rawHistory[i].minute;
 
-            haHistory.push_back(ha);
-            haCloses.push_back(ha.close);
+            kalmanHistory.push_back(k_candle);
+            kalmanCloses.push_back(k_candle.close);
         }
     }
 

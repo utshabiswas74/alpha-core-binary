@@ -79,19 +79,19 @@ int main(int argc, char* argv[]) {
     
     if (history.size() < config.inputTimeSteps + 100) return 1;
 
-    std::vector<Candle> haHistory;
-    std::vector<double> haCloses;
-    std::cout << "Converting to Smoothed Heikin-Ashi..." << std::endl;
-    Utils::convertToHeikinAshi(history, haHistory, haCloses);
+    std::vector<Candle> kalmanHistory;
+    std::vector<double> kalmanCloses;
+    std::cout << "Applying Kalman Filter..." << std::endl;
+    Utils::applyKalmanFilter(history, kalmanHistory, kalmanCloses);
 
     int valSize = static_cast<int>(history.size() * 0.10);
 
     std::cout << "Calculating indicators..." << std::endl;
-    std::vector<double> rsi = Utils::calculateRSI(haCloses, 9);
-    std::vector<double> ema20 = Utils::calculateEMA(haCloses, 20);
-    std::vector<double> atr = Utils::calculateATR(haHistory, 14);
-    std::vector<double> adx = Utils::calculateADX(haHistory, 14);
-    std::vector<double> bbPct = Utils::calculateBB_PctB(haCloses, 20, 2.0);
+    std::vector<double> rsi = Utils::calculateRSI(kalmanCloses, 9);
+    std::vector<double> ema20 = Utils::calculateEMA(kalmanCloses, 20);
+    std::vector<double> atr = Utils::calculateATR(kalmanHistory, 14);
+    std::vector<double> adx = Utils::calculateADX(kalmanHistory, 14);
+    std::vector<double> bbPct = Utils::calculateBB_PctB(kalmanCloses, 20, 2.0);
 
     int trainSize = std::max(0, (int)history.size() - valSize);
     std::vector<int> trainIndices, valIndices;
@@ -150,7 +150,7 @@ int main(int argc, char* argv[]) {
 
     for (size_t i = 0; i < trainIndices.size(); ++i) {
         int idx = trainIndices[i];
-        trainInputs[i] = Utils::generateInputTensor(idx, haHistory, haCloses, ema20, rsi, atr, adx, bbPct, config.inputTimeSteps, config.inputFeatures);
+        trainInputs[i] = Utils::generateInputTensor(idx, kalmanHistory, kalmanCloses, ema20, rsi, atr, adx, bbPct, config.inputTimeSteps, config.inputFeatures);
         trainBuyTargets[i] = allBuyLabels[idx];
         trainSellTargets[i] = allSellLabels[idx];
     }
@@ -160,7 +160,7 @@ int main(int argc, char* argv[]) {
 
     for (size_t i = 0; i < valIndices.size(); ++i) {
         int idx = valIndices[i];
-        valInputs[i] = Utils::generateInputTensor(idx, haHistory, haCloses, ema20, rsi, atr, adx, bbPct, config.inputTimeSteps, config.inputFeatures);
+        valInputs[i] = Utils::generateInputTensor(idx, kalmanHistory, kalmanCloses, ema20, rsi, atr, adx, bbPct, config.inputTimeSteps, config.inputFeatures);
         valBuyTargets[i] = allBuyLabels[idx];
         valSellTargets[i] = allSellLabels[idx];
     }
@@ -267,26 +267,26 @@ int main(int argc, char* argv[]) {
 
         std::cout << "[Epoch " << std::setw(3) << epoch << "] Time: " 
                   << std::fixed << std::setprecision(2) << epochTime.count() << "s | "
-                  << "Buy_Val: " << std::setprecision(2) << bValAcc << "% | "
-                  << "Sell_Val: " << std::setprecision(2) << sValAcc << "%";
+                  << "Buy_Val: " << std::setprecision(2) << bValAcc << "% [" << bCorrect << "/" << bGiven << "] | "
+                  << "Sell_Val: " << std::setprecision(2) << sValAcc << "% [" << sCorrect << "/" << sGiven << "]";
 
         if (epoch > 4) {
-            if (bValAcc > bestBuyAcc && bGiven > 9) {
+            if (bValAcc > bestBuyAcc && bGiven > 99) {
                 bestBuyAcc = bValAcc;
                 std::ofstream file(outputBuyFile, std::ios::binary);
                 if (file.is_open()) {
                     buyModel.save(file);
                     file.close();
-                    std::cout << " [BUY SAVED]";
+                    std::cout << " | [BUY SAVED]";
                 }
             }
-            if (sValAcc > bestSellAcc && sGiven > 9) {
+            if (sValAcc > bestSellAcc && sGiven > 99) {
                 bestSellAcc = sValAcc;
                 std::ofstream file(outputSellFile, std::ios::binary);
                 if (file.is_open()) {
                     sellModel.save(file);
                     file.close();
-                    std::cout << " [SELL SAVED]";
+                    std::cout << " | [SELL SAVED]";
                 }
             }
         }
