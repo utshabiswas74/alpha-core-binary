@@ -14,12 +14,12 @@ const INDEX_PATH = path.join(PUBLIC_DIR, 'index.html');
 const ENGINE_PATH = path.join(RESOURCES_PATH, 'bin', 'engine.exe');
 
 const DERIV_TOKEN = "S4B3gsvNAwpnHEQ";
-const TRADING_TIMEFRAME_MIN = 10;
+const TRADING_TIMEFRAME_MIN = 1;
 const DERIV_APP_ID = 120975;
 const HISTORY_COUNT = 5000;
 const STATS_WINDOW = 100;
 const BASE_STAKE = 1.00;
-const SYMBOL = "R_75";
+const SYMBOL = "R_100";
 
 let mainWindow;
 let ws = null;
@@ -35,7 +35,6 @@ let isRunningLive = false;
 
 let lastProcessedEpoch = 0;
 let initialBalance = null;
-let systemLockEpoch = 0;
 
 let windowSignals = [];
 let runningPositions = [];
@@ -136,7 +135,6 @@ async function analyzeHistoryBatch() {
     const startIndex = Math.max(0, lastSafeIndex - STATS_WINDOW);
 
     windowSignals = [];
-    systemLockEpoch = 0;
 
     for (let i = startIndex; i <= lastSafeIndex; i++) {
         const currentCandle = liveCandles[i];
@@ -152,18 +150,15 @@ async function analyzeHistoryBatch() {
             const target = result.target ? parseInt(result.target) : 1;
             const tempTargetEpoch = currentCandle.epoch + (target * TRADING_TIMEFRAME_MIN * 60);
             
-            if (currentCandle.epoch >= systemLockEpoch) {
-                finalSignal = result.signal;
-                targetEpoch = tempTargetEpoch;
-                systemLockEpoch = targetEpoch;
-                
-                if (i + target < liveCandles.length) {
-                    const exitPrice = parseFloat(liveCandles[i + target].close);
-                    if (finalSignal === "BUY") {
-                        isWin = exitPrice > entryPrice;
-                    } else if (finalSignal === "SELL") {
-                        isWin = exitPrice < entryPrice;
-                    }
+            finalSignal = result.signal;
+            targetEpoch = tempTargetEpoch;
+            
+            if (i + target < liveCandles.length) {
+                const exitPrice = parseFloat(liveCandles[i + target].close);
+                if (finalSignal === "BUY") {
+                    isWin = exitPrice > entryPrice;
+                } else if (finalSignal === "SELL") {
+                    isWin = exitPrice < entryPrice;
                 }
             }
         }
@@ -221,50 +216,17 @@ async function runLiveAnalysis() {
             
             let actualStake = currentStake;
 
-            if ((signal === "BUY" || signal === "SELL") && lastCandle.epoch >= systemLockEpoch) {
-                const vTrades = windowSignals.filter(s => (s.signal === 'BUY' || s.signal === 'SELL') && s.result !== null);
-                const n = vTrades.length;
-                
-                let wWins = 0;
-                let wTotal = 0;
-                
-                const b1 = vTrades.slice(Math.max(0, n - 10));
-                wWins += b1.filter(t => t.result === true).length * 4;
-                wTotal += b1.length * 4;
-                
-                const b2 = vTrades.slice(Math.max(0, n - 30), Math.max(0, n - 10));
-                wWins += b2.filter(t => t.result === true).length * 3;
-                wTotal += b2.length * 3;
-                
-                const b3 = vTrades.slice(Math.max(0, n - 60), Math.max(0, n - 30));
-                wWins += b3.filter(t => t.result === true).length * 2;
-                wTotal += b3.length * 2;
-                
-                const b4 = vTrades.slice(Math.max(0, n - 100), Math.max(0, n - 60));
-                wWins += b4.filter(t => t.result === true).length * 1;
-                wTotal += b4.length * 1;
-
-                const weightedAccuracy = wTotal > 0 ? (wWins / wTotal) * 100 : 100;
-
+            if (signal === "BUY" || signal === "SELL") {
                 finalSignal = signal;
                 targetEpoch = tempTargetEpoch;
-                systemLockEpoch = targetEpoch;
 
-                if (weightedAccuracy > 50) {
-                    sendToUI('bot-log', `[BOT] ${signal} (${confidence.toFixed(1)}%) | Price: ${currentPrice.toFixed(2)} | Stake: ${actualStake.toFixed(2)}`);
-                    if (isTradingEnabled) {
-                        isRealTrade = true;
-                        placeDerivTrade(signal, currentPrice, actualStake, lastCandle.epoch, target);
-                    }
-                } else {
-                    sendToUI('bot-log', `[FILTER] ${signal} (${confidence.toFixed(1)}%) | Price: ${currentPrice.toFixed(2)} | Stake: ${actualStake.toFixed(2)}`);
+                sendToUI('bot-log', `[BOT] ${signal} (${confidence.toFixed(1)}%) | Price: ${currentPrice.toFixed(2)} | Stake: ${actualStake.toFixed(2)}`);
+                if (isTradingEnabled) {
+                    isRealTrade = true;
+                    placeDerivTrade(signal, currentPrice, actualStake, lastCandle.epoch, target);
                 }
             } else {
-                if (signal === "BUY" || signal === "SELL") {
-                    sendToUI('bot-log', `[FILTER] ${signal} (${confidence.toFixed(1)}%) | Price: ${currentPrice.toFixed(2)} | Stake: ${actualStake.toFixed(2)}`);
-                } else {
-                    sendToUI('bot-log', `[FILTER] HOLD (${confidence.toFixed(1)}%) | Price: ${currentPrice.toFixed(2)} | Stake: ${actualStake.toFixed(2)}`);
-                }
+                sendToUI('bot-log', `[FILTER] HOLD (${confidence.toFixed(1)}%) | Price: ${currentPrice.toFixed(2)} | Stake: ${actualStake.toFixed(2)}`);
             }
         } else {
             targetEpoch = lastCandle.epoch + (TRADING_TIMEFRAME_MIN * 60);
@@ -291,7 +253,6 @@ function stopDerivBot() {
     isTradingEnabled = false;
     isSystemReady = false;
     initialBalance = null;
-    systemLockEpoch = 0;
     isAnalyzingHistory = false;
     isRunningLive = false;
     currentStake = BASE_STAKE;
