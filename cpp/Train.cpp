@@ -170,8 +170,8 @@ int main(int argc, char* argv[]) {
         if (valSellTargets[i] == 1.0) valSellCount++;
     }
 
-    int minBuyTrades = std::max(40, static_cast<int>(valBuyCount * 0.10));
-    int minSellTrades = std::max(40, static_cast<int>(valSellCount * 0.10));
+    int minBuyTrades = std::max(40, static_cast<int>(valBuyCount * 0.25));
+    int minSellTrades = std::max(40, static_cast<int>(valSellCount * 0.25));
 
     CNN buyModel(config), sellModel(config);
     double currentLR = Config::LEARNING_RATE;
@@ -279,24 +279,22 @@ int main(int argc, char* argv[]) {
                   << "Sell_Val: " << std::fixed << std::setw(5) << std::setprecision(2) << sValAcc << "% [" 
                   << std::setw(4) << sCorrect << "/" << std::setw(4) << sGiven << "]";
 
-        if (epoch > 4) {
-            if (bValAcc > bestBuyAcc && bGiven > minBuyTrades) {
-                bestBuyAcc = bValAcc;
-                std::ofstream file(outputBuyFile, std::ios::binary);
-                if (file.is_open()) {
-                    buyModel.save(file);
-                    file.close();
-                    std::cout << " | [BUY SAVED]";
-                }
+        if (bValAcc > bestBuyAcc && bGiven > minBuyTrades) {
+            bestBuyAcc = bValAcc;
+            std::ofstream file(outputBuyFile, std::ios::binary);
+            if (file.is_open()) {
+                buyModel.save(file);
+                file.close();
+                std::cout << " | [BUY SAVED]";
             }
-            if (sValAcc > bestSellAcc && sGiven > minSellTrades) {
-                bestSellAcc = sValAcc;
-                std::ofstream file(outputSellFile, std::ios::binary);
-                if (file.is_open()) {
-                    sellModel.save(file);
-                    file.close();
-                    std::cout << " | [SELL SAVED]";
-                }
+        }
+        if (sValAcc > bestSellAcc && sGiven > minSellTrades) {
+            bestSellAcc = sValAcc;
+            std::ofstream file(outputSellFile, std::ios::binary);
+            if (file.is_open()) {
+                sellModel.save(file);
+                file.close();
+                std::cout << " | [SELL SAVED]";
             }
         }
         std::cout << std::endl;
