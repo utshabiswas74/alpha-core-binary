@@ -158,12 +158,20 @@ int main(int argc, char* argv[]) {
     std::vector<Tensor> valInputs(valIndices.size());
     std::vector<double> valBuyTargets(valIndices.size()), valSellTargets(valIndices.size());
 
+    int valBuyCount = 0, valSellCount = 0;
+
     for (size_t i = 0; i < valIndices.size(); ++i) {
         int idx = valIndices[i];
         valInputs[i] = Utils::generateInputTensor(idx, kalmanHistory, kalmanCloses, ema20, rsi, atr, adx, bbPct, config.inputTimeSteps, config.inputFeatures);
         valBuyTargets[i] = allBuyLabels[idx];
         valSellTargets[i] = allSellLabels[idx];
+        
+        if (valBuyTargets[i] == 1.0) valBuyCount++;
+        if (valSellTargets[i] == 1.0) valSellCount++;
     }
+
+    int minBuyTrades = std::max(40, static_cast<int>(valBuyCount * 0.10));
+    int minSellTrades = std::max(40, static_cast<int>(valSellCount * 0.10));
 
     CNN buyModel(config), sellModel(config);
     double currentLR = Config::LEARNING_RATE;
@@ -266,11 +274,13 @@ int main(int argc, char* argv[]) {
 
         std::cout << "[Epoch " << std::setw(3) << epoch << "] Time: " 
                   << std::fixed << std::setprecision(2) << epochTime.count() << "s | "
-                  << "Buy_Val: " << std::setprecision(2) << bValAcc << "% [" << bCorrect << "/" << bGiven << "] | "
-                  << "Sell_Val: " << std::setprecision(2) << sValAcc << "% [" << sCorrect << "/" << sGiven << "]";
+                  << "Buy_Val: " << std::fixed << std::setw(5) << std::setprecision(2) << bValAcc << "% [" 
+                  << std::setw(4) << bCorrect << "/" << std::setw(4) << bGiven << "] | "
+                  << "Sell_Val: " << std::fixed << std::setw(5) << std::setprecision(2) << sValAcc << "% [" 
+                  << std::setw(4) << sCorrect << "/" << std::setw(4) << sGiven << "]";
 
         if (epoch > 4) {
-            if (bValAcc > bestBuyAcc && bGiven > 99) {
+            if (bValAcc > bestBuyAcc && bGiven > minBuyTrades) {
                 bestBuyAcc = bValAcc;
                 std::ofstream file(outputBuyFile, std::ios::binary);
                 if (file.is_open()) {
@@ -279,7 +289,7 @@ int main(int argc, char* argv[]) {
                     std::cout << " | [BUY SAVED]";
                 }
             }
-            if (sValAcc > bestSellAcc && sGiven > 99) {
+            if (sValAcc > bestSellAcc && sGiven > minSellTrades) {
                 bestSellAcc = sValAcc;
                 std::ofstream file(outputSellFile, std::ios::binary);
                 if (file.is_open()) {

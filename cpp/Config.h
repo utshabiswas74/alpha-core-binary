@@ -27,7 +27,7 @@ namespace Config {
     const int EPOCHS = 128;
     const int BATCH_SIZE = 128;
     const double LEARNING_RATE = 0.0001;
-    const double INPUT_NOISE = 0.01;
+    const double INPUT_NOISE = 0.0128;
     
     const double DROPOUT_RATE_1 = 0.40;
     const double DROPOUT_RATE_2 = 0.40;
