@@ -42,8 +42,8 @@ bool fileExists(const std::string& name) {
     return f.good();
 }
 
-void getTargetModelFiles(std::string& buyFile, std::string& sellFile) {
-    std::string base = Config::MODEL_FILE_BASE;
+void getTargetModelFiles(std::string& buyFile, std::string& sellFile, int targetCandles) {
+    std::string base = Config::MODEL_FILE_BASE + "_t" + std::to_string(targetCandles);
     int i = 1;
     while (true) {
         buyFile = base + "_buy_v" + std::to_string(i) + ".bin";
@@ -62,12 +62,13 @@ int main(int argc, char* argv[]) {
     std::string outputSellFile;
 
     if (argc > 1) {
-        outputBuyFile = Config::MODEL_FILE_BASE + "_buy_v" + std::string(argv[1]) + ".bin";
-        outputSellFile = Config::MODEL_FILE_BASE + "_sell_v" + std::string(argv[1]) + ".bin";
+        outputBuyFile = Config::MODEL_FILE_BASE + "_t" + std::to_string(Config::TARGET_CANDLES) + "_buy_v" + std::string(argv[1]) + ".bin";
+        outputSellFile = Config::MODEL_FILE_BASE + "_t" + std::to_string(Config::TARGET_CANDLES) + "_sell_v" + std::string(argv[1]) + ".bin";
     } else {
-        getTargetModelFiles(outputBuyFile, outputSellFile);
+        getTargetModelFiles(outputBuyFile, outputSellFile, Config::TARGET_CANDLES);
     }
 
+    std::cout << "Target Candles: " << Config::TARGET_CANDLES << std::endl;
     std::cout << "Target Buy Model:  " << outputBuyFile << std::endl;
     std::cout << "Target Sell Model: " << outputSellFile << std::endl;
 
@@ -170,8 +171,8 @@ int main(int argc, char* argv[]) {
         if (valSellTargets[i] == 1.0) valSellCount++;
     }
 
-    int minBuyTrades = std::max(40, static_cast<int>(valBuyCount * 0.25));
-    int minSellTrades = std::max(40, static_cast<int>(valSellCount * 0.25));
+    int minBuyTrades = std::max(10, static_cast<int>(valBuyCount * 0.10));
+    int minSellTrades = std::max(10, static_cast<int>(valSellCount * 0.10));
 
     CNN buyModel(config), sellModel(config);
     double currentLR = Config::LEARNING_RATE;

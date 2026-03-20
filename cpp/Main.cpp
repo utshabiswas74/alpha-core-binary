@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <memory>
 #include <fstream>
+#include <map>
 #include "Config.h"
 #include "Utils.h"
 #include "NeuralNetwork.h"
@@ -69,34 +70,45 @@ void aggregateCandles(const std::vector<Candle>& history, int multiplier, std::v
     }
 }
 
+struct ModelGroup {
+    int targetCandles;
+    std::vector<std::unique_ptr<CNN>> buyModels;
+    std::vector<std::unique_ptr<CNN>> sellModels;
+};
+
 int main() {
     std::ios_base::sync_with_stdio(false);
     std::cin.tie(NULL);
 
-    std::vector<std::unique_ptr<CNN>> buyModels;
-    std::vector<std::unique_ptr<CNN>> sellModels;
+    std::map<int, ModelGroup> modelGroups;
+
+    for (int t = 1; t <= 30; ++t) {
+        for (int i = 1; i <= Config::MAX_ENSEMBLE_MODELS; ++i) {
+            std::string buyPath = Config::MODEL_FILE_BASE + "_t" + std::to_string(t) + "_buy_v" + std::to_string(i) + ".bin";
+            std::string sellPath = Config::MODEL_FILE_BASE + "_t" + std::to_string(t) + "_sell_v" + std::to_string(i) + ".bin";
+            std::ifstream fb(buyPath, std::ios::binary);
+            std::ifstream fs(sellPath, std::ios::binary);
+            
+            if (fb.is_open() && fs.is_open()) {
+                auto buyCnn = std::make_unique<CNN>();
+                auto sellCnn = std::make_unique<CNN>();
+                if (buyCnn->load(fb) && sellCnn->load(fs)) {
+                    modelGroups[t].targetCandles = t;
+                    modelGroups[t].buyModels.push_back(std::move(buyCnn));
+                    modelGroups[t].sellModels.push_back(std::move(sellCnn));
+                }
+            }
+            if (fb.is_open()) fb.close();
+            if (fs.is_open()) fs.close();
+        }
+    }
+
     std::vector<std::unique_ptr<CNN>> extraBuyModels;
     std::vector<std::unique_ptr<CNN>> extraSellModels;
 
     for (int i = 1; i <= Config::MAX_ENSEMBLE_MODELS; ++i) {
-        std::string buyPath = Config::MODEL_FILE_BASE + "_buy_v" + std::to_string(i) + ".bin";
-        std::string sellPath = Config::MODEL_FILE_BASE + "_sell_v" + std::to_string(i) + ".bin";
-        std::ifstream fb(buyPath, std::ios::binary);
-        std::ifstream fs(sellPath, std::ios::binary);
-        
-        if (fb.is_open() && fs.is_open()) {
-            auto buyCnn = std::make_unique<CNN>();
-            auto sellCnn = std::make_unique<CNN>();
-            if (buyCnn->load(fb) && sellCnn->load(fs)) {
-                buyModels.push_back(std::move(buyCnn));
-                sellModels.push_back(std::move(sellCnn));
-            }
-        }
-        if (fb.is_open()) fb.close();
-        if (fs.is_open()) fs.close();
-
-        std::string exBuyPath = Config::MODEL_FILE_EXTRA + "_buy_v" + std::to_string(i) + ".bin";
-        std::string exSellPath = Config::MODEL_FILE_EXTRA + "_sell_v" + std::to_string(i) + ".bin";
+        std::string exBuyPath = Config::MODEL_FILE_EXTRA + "_t1_buy_v" + std::to_string(i) + ".bin";
+        std::string exSellPath = Config::MODEL_FILE_EXTRA + "_t1_sell_v" + std::to_string(i) + ".bin";
         std::ifstream feb(exBuyPath, std::ios::binary);
         std::ifstream fes(exSellPath, std::ios::binary);
         
@@ -112,7 +124,7 @@ int main() {
         if (fes.is_open()) fes.close();
     }
 
-    if (buyModels.empty() || sellModels.empty()) {
+    if (modelGroups.empty()) {
         return 1;
     }
 
@@ -136,45 +148,9 @@ int main() {
     std::vector<double> bbPct = Utils::calculateBB_PctB(kalmanCloses, 20, 2.0);
 
     int lastIndex = kalmanHistory.size() - 1; 
-    double totalBuyPred = 0.0;
-    double totalSellPred = 0.0;
-    int validModels = 0;
 
-    for (size_t i = 0; i < buyModels.size(); ++i) {
-        int steps = buyModels[i]->config.inputTimeSteps;
-        int feats = buyModels[i]->config.inputFeatures;
-
-        if (lastIndex < steps) continue;
-
-        Tensor input = Utils::generateInputTensor(lastIndex, kalmanHistory, kalmanCloses, ema20, rsi, atr, adx, bbPct, steps, feats);
-
-        if (input.depth > 0) {
-            totalBuyPred += buyModels[i]->predict(input);
-            totalSellPred += sellModels[i]->predict(input);
-            validModels++;
-        }
-    }
-
-    if (validModels == 0) {
-        return 0;
-    }
-
-    double avgBuy = totalBuyPred / validModels;
-    double avgSell = totalSellPred / validModels;
-
-    std::string regularSignal = "HOLD";
-    double finalConfidence = std::max(avgBuy, avgSell) * 100.0;
-
-    if (finalConfidence > 50) {
-        if ((avgBuy - avgSell) > 0.01) {
-            regularSignal = "BUY";
-        } else if ((avgSell - avgBuy) > 0.01) {
-            regularSignal = "SELL";
-        }
-    }
-
-    std::string extraSignal = regularSignal;
-
+    std::string extraSignal = "ANY";
+    
     if (!extraBuyModels.empty() && Config::TIMEFRAME_MULTIPLIER > 1) {
         extraSignal = "HOLD";
         std::vector<Candle> extraHistory;
@@ -229,17 +205,66 @@ int main() {
         }
     }
 
+    int bestTarget = Config::TARGET_CANDLES;
+    double bestConf = 0.0;
+    double bestBuyProb = 0.0;
+    double bestSellProb = 0.0;
     std::string finalSignal = "HOLD";
-    if (regularSignal == extraSignal && regularSignal != "HOLD") {
-        finalSignal = regularSignal;
+
+    if (extraSignal != "HOLD") {
+        for (auto& pair : modelGroups) {
+            int t = pair.first;
+            auto& group = pair.second;
+            
+            double totalBuy = 0.0;
+            double totalSell = 0.0;
+            int valid = 0;
+
+            for (size_t i = 0; i < group.buyModels.size(); ++i) {
+                int steps = group.buyModels[i]->config.inputTimeSteps;
+                int feats = group.buyModels[i]->config.inputFeatures;
+
+                if (lastIndex < steps) continue;
+
+                Tensor input = Utils::generateInputTensor(lastIndex, kalmanHistory, kalmanCloses, ema20, rsi, atr, adx, bbPct, steps, feats);
+
+                if (input.depth > 0) {
+                    totalBuy += group.buyModels[i]->predict(input);
+                    totalSell += group.sellModels[i]->predict(input);
+                    valid++;
+                }
+            }
+
+            if (valid > 0) {
+                double avgBuy = totalBuy / valid;
+                double avgSell = totalSell / valid;
+                double conf = std::max(avgBuy, avgSell) * 100.0;
+                
+                std::string grpSignal = "HOLD";
+                if (conf > 50) {
+                    if ((avgBuy - avgSell) > 0.01) grpSignal = "BUY";
+                    else if ((avgSell - avgBuy) > 0.01) grpSignal = "SELL";
+                }
+
+                if (grpSignal != "HOLD" && (extraSignal == "ANY" || grpSignal == extraSignal)) {
+                    if (conf > bestConf) {
+                        bestConf = conf;
+                        bestTarget = t;
+                        bestBuyProb = avgBuy;
+                        bestSellProb = avgSell;
+                        finalSignal = grpSignal;
+                    }
+                }
+            }
+        }
     }
 
     std::cout << "JSON_START{"
               << "\"signal\": \"" << finalSignal << "\", "
-              << "\"confidence\": " << std::fixed << std::setprecision(2) << finalConfidence << ", "
-              << "\"prob_buy\": " << std::fixed << std::setprecision(6) << avgBuy << ", "
-              << "\"prob_sell\": " << std::fixed << std::setprecision(6) << avgSell << ", "
-              << "\"target\": " << Config::TARGET_CANDLES
+              << "\"confidence\": " << std::fixed << std::setprecision(2) << bestConf << ", "
+              << "\"prob_buy\": " << std::fixed << std::setprecision(6) << bestBuyProb << ", "
+              << "\"prob_sell\": " << std::fixed << std::setprecision(6) << bestSellProb << ", "
+              << "\"target\": " << bestTarget
               << "}JSON_END\n";
 
     return 0;

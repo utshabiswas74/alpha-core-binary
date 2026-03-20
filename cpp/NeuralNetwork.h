@@ -1027,6 +1027,7 @@ public:
         file.write(reinterpret_cast<const char*>(&config.hiddenNeurons1), sizeof(int));
         file.write(reinterpret_cast<const char*>(&config.hiddenNeurons2), sizeof(int));
         file.write(reinterpret_cast<const char*>(&config.outputSize), sizeof(int));
+        file.write(reinterpret_cast<const char*>(&config.targetCandles), sizeof(int));
         
         for(auto& l : layers) l->save(file);
         return true;
@@ -1049,6 +1050,7 @@ public:
         file.read(reinterpret_cast<char*>(&config.hiddenNeurons1), sizeof(int));
         file.read(reinterpret_cast<char*>(&config.hiddenNeurons2), sizeof(int));
         file.read(reinterpret_cast<char*>(&config.outputSize), sizeof(int));
+        file.read(reinterpret_cast<char*>(&config.targetCandles), sizeof(int));
 
         if(!file) return false;
         

@@ -4,6 +4,8 @@
 #include <string>
 
 namespace Config {
+    const int TARGET_CANDLES = 1;
+
     struct ModelConfig {
         int inputTimeSteps = 24;
         int inputFeatures = 16;
@@ -22,6 +24,8 @@ namespace Config {
         int hiddenNeurons1 = 128;
         int hiddenNeurons2 = 128;
         int outputSize = 1;
+
+        int targetCandles = TARGET_CANDLES;
     };
     
     const int EPOCHS = 128;
@@ -41,7 +45,6 @@ namespace Config {
     const int IDX_PRICE_POS = 13;
     const int IDX_BB_PCT = 14;
 
-    const int TARGET_CANDLES = 4;
     const int MAX_ENSEMBLE_MODELS = 6;
     const int TIMEFRAME_MULTIPLIER = 6;
     const double MIN_MOVEMENT_PCT = 0.01;

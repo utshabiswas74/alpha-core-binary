@@ -17,7 +17,7 @@ const DERIV_TOKEN = "S4B3gsvNAwpnHEQ";
 const TRADING_TIMEFRAME_MIN = 10;
 const DERIV_APP_ID = 120975;
 const HISTORY_COUNT = 5000;
-const STATS_WINDOW = 1000;
+const STATS_WINDOW = 100;
 const BASE_STAKE = 1.00;
 const SYMBOL = "R_100";
 
