@@ -43,7 +43,7 @@ bool fileExists(const std::string& name) {
 }
 
 void getTargetModelFiles(std::string& buyFile, std::string& sellFile, int targetCandles) {
-    std::string base = Config::MODEL_FILE_BASE + "_t" + std::to_string(targetCandles);
+    std::string base = Config::MODEL_FILE_WORKERS + "_t" + std::to_string(targetCandles);
     int i = 1;
     while (true) {
         buyFile = base + "_buy_v" + std::to_string(i) + ".bin";
@@ -62,8 +62,8 @@ int main(int argc, char* argv[]) {
     std::string outputSellFile;
 
     if (argc > 1) {
-        outputBuyFile = Config::MODEL_FILE_BASE + "_t" + std::to_string(Config::TARGET_CANDLES) + "_buy_v" + std::string(argv[1]) + ".bin";
-        outputSellFile = Config::MODEL_FILE_BASE + "_t" + std::to_string(Config::TARGET_CANDLES) + "_sell_v" + std::string(argv[1]) + ".bin";
+        outputBuyFile = Config::MODEL_FILE_WORKERS + "_t" + std::to_string(Config::TARGET_CANDLES) + "_buy_v" + std::string(argv[1]) + ".bin";
+        outputSellFile = Config::MODEL_FILE_WORKERS + "_t" + std::to_string(Config::TARGET_CANDLES) + "_sell_v" + std::string(argv[1]) + ".bin";
     } else {
         getTargetModelFiles(outputBuyFile, outputSellFile, Config::TARGET_CANDLES);
     }

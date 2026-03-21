@@ -52,8 +52,8 @@ namespace Config {
     const double KALMAN_PROCESS_NOISE = 1e-4;
     const double KALMAN_MEASUREMENT_NOISE = 1e-2;
 
-    const std::string MODEL_FILE_BASE = "data/workers_brain/model_brain";
-    const std::string MODEL_FILE_EXTRA = "data/masters_brain/model_brain";
+    const std::string MODEL_FILE_WORKERS = "data/workers_brain/model_brain";
+    const std::string MODEL_FILE_MASTERS = "data/masters_brain/model_brain";
     const std::string TRAIN_DATA_FILE = "data/training_data.csv";
 }
 

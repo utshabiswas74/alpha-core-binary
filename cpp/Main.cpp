@@ -80,12 +80,12 @@ int main() {
     std::ios_base::sync_with_stdio(false);
     std::cin.tie(NULL);
 
-    std::map<int, ModelGroup> modelGroups;
+    std::map<int, ModelGroup> workerGroups;
 
-    for (int t = 1; t <= 30; ++t) {
+    for (int t = 1; t <= 10; ++t) {
         for (int i = 1; i <= Config::MAX_ENSEMBLE_MODELS; ++i) {
-            std::string buyPath = Config::MODEL_FILE_BASE + "_t" + std::to_string(t) + "_buy_v" + std::to_string(i) + ".bin";
-            std::string sellPath = Config::MODEL_FILE_BASE + "_t" + std::to_string(t) + "_sell_v" + std::to_string(i) + ".bin";
+            std::string buyPath = Config::MODEL_FILE_WORKERS + "_t" + std::to_string(t) + "_buy_v" + std::to_string(i) + ".bin";
+            std::string sellPath = Config::MODEL_FILE_WORKERS + "_t" + std::to_string(t) + "_sell_v" + std::to_string(i) + ".bin";
             std::ifstream fb(buyPath, std::ios::binary);
             std::ifstream fs(sellPath, std::ios::binary);
             
@@ -93,9 +93,9 @@ int main() {
                 auto buyCnn = std::make_unique<CNN>();
                 auto sellCnn = std::make_unique<CNN>();
                 if (buyCnn->load(fb) && sellCnn->load(fs)) {
-                    modelGroups[t].targetCandles = t;
-                    modelGroups[t].buyModels.push_back(std::move(buyCnn));
-                    modelGroups[t].sellModels.push_back(std::move(sellCnn));
+                    workerGroups[t].targetCandles = t;
+                    workerGroups[t].buyModels.push_back(std::move(buyCnn));
+                    workerGroups[t].sellModels.push_back(std::move(sellCnn));
                 }
             }
             if (fb.is_open()) fb.close();
@@ -103,28 +103,28 @@ int main() {
         }
     }
 
-    std::vector<std::unique_ptr<CNN>> extraBuyModels;
-    std::vector<std::unique_ptr<CNN>> extraSellModels;
+    std::vector<std::unique_ptr<CNN>> masterBuyModels;
+    std::vector<std::unique_ptr<CNN>> masterSellModels;
 
     for (int i = 1; i <= Config::MAX_ENSEMBLE_MODELS; ++i) {
-        std::string exBuyPath = Config::MODEL_FILE_EXTRA + "_t1_buy_v" + std::to_string(i) + ".bin";
-        std::string exSellPath = Config::MODEL_FILE_EXTRA + "_t1_sell_v" + std::to_string(i) + ".bin";
-        std::ifstream feb(exBuyPath, std::ios::binary);
-        std::ifstream fes(exSellPath, std::ios::binary);
+        std::string masterBuyPath = Config::MODEL_FILE_MASTERS + "_t1_buy_v" + std::to_string(i) + ".bin";
+        std::string masterSellPath = Config::MODEL_FILE_MASTERS + "_t1_sell_v" + std::to_string(i) + ".bin";
+        std::ifstream feb(masterBuyPath, std::ios::binary);
+        std::ifstream fes(masterSellPath, std::ios::binary);
         
         if (feb.is_open() && fes.is_open()) {
-            auto buyCnnExtra = std::make_unique<CNN>();
-            auto sellCnnExtra = std::make_unique<CNN>();
-            if (buyCnnExtra->load(feb) && sellCnnExtra->load(fes)) {
-                extraBuyModels.push_back(std::move(buyCnnExtra));
-                extraSellModels.push_back(std::move(sellCnnExtra));
+            auto buyCnnMaster = std::make_unique<CNN>();
+            auto sellCnnMaster = std::make_unique<CNN>();
+            if (buyCnnMaster->load(feb) && sellCnnMaster->load(fes)) {
+                masterBuyModels.push_back(std::move(buyCnnMaster));
+                masterSellModels.push_back(std::move(sellCnnMaster));
             }
         }
         if (feb.is_open()) feb.close();
         if (fes.is_open()) fes.close();
     }
 
-    if (modelGroups.empty()) {
+    if (workerGroups.empty()) {
         return 1;
     }
 
@@ -149,56 +149,56 @@ int main() {
 
     int lastIndex = kalmanHistory.size() - 1; 
 
-    std::string extraSignal = "ANY";
+    std::string masterDecision = "ANY";
     
-    if (!extraBuyModels.empty() && Config::TIMEFRAME_MULTIPLIER > 1) {
-        extraSignal = "HOLD";
-        std::vector<Candle> extraHistory;
-        std::vector<double> extraCloses;
+    if (!masterBuyModels.empty() && Config::TIMEFRAME_MULTIPLIER > 1) {
+        masterDecision = "HOLD";
+        std::vector<Candle> masterHistory;
+        std::vector<double> masterCloses;
         
-        aggregateCandles(history, Config::TIMEFRAME_MULTIPLIER, extraHistory, extraCloses);
+        aggregateCandles(history, Config::TIMEFRAME_MULTIPLIER, masterHistory, masterCloses);
 
-        if (extraHistory.size() >= 50) {
-            std::vector<Candle> extraKalmanHistory;
-            std::vector<double> extraKalmanCloses;
-            Utils::applyKalmanFilter(extraHistory, extraKalmanHistory, extraKalmanCloses);
+        if (masterHistory.size() >= 50) {
+            std::vector<Candle> masterKalmanHistory;
+            std::vector<double> masterKalmanCloses;
+            Utils::applyKalmanFilter(masterHistory, masterKalmanHistory, masterKalmanCloses);
 
-            std::vector<double> extraRsi = Utils::calculateRSI(extraKalmanCloses, 9);
-            std::vector<double> extraEma20 = Utils::calculateEMA(extraKalmanCloses, 20);
-            std::vector<double> extraAtr = Utils::calculateATR(extraKalmanHistory, 14);
-            std::vector<double> extraAdx = Utils::calculateADX(extraKalmanHistory, 14);
-            std::vector<double> extraBbPct = Utils::calculateBB_PctB(extraKalmanCloses, 20, 2.0);
+            std::vector<double> masterRsi = Utils::calculateRSI(masterKalmanCloses, 9);
+            std::vector<double> masterEma20 = Utils::calculateEMA(masterKalmanCloses, 20);
+            std::vector<double> masterAtr = Utils::calculateATR(masterKalmanHistory, 14);
+            std::vector<double> masterAdx = Utils::calculateADX(masterKalmanHistory, 14);
+            std::vector<double> masterBbPct = Utils::calculateBB_PctB(masterKalmanCloses, 20, 2.0);
 
-            int extraLastIndex = extraKalmanHistory.size() - 1;
-            double totalExtraBuy = 0.0;
-            double totalExtraSell = 0.0;
-            int validExtra = 0;
+            int masterLastIndex = masterKalmanHistory.size() - 1;
+            double totalMasterBuy = 0.0;
+            double totalMasterSell = 0.0;
+            int validMaster = 0;
 
-            for (size_t i = 0; i < extraBuyModels.size(); ++i) {
-                int steps = extraBuyModels[i]->config.inputTimeSteps;
-                int feats = extraBuyModels[i]->config.inputFeatures;
+            for (size_t i = 0; i < masterBuyModels.size(); ++i) {
+                int steps = masterBuyModels[i]->config.inputTimeSteps;
+                int feats = masterBuyModels[i]->config.inputFeatures;
 
-                if (extraLastIndex < steps) continue;
+                if (masterLastIndex < steps) continue;
 
-                Tensor input = Utils::generateInputTensor(extraLastIndex, extraKalmanHistory, extraKalmanCloses, extraEma20, extraRsi, extraAtr, extraAdx, extraBbPct, steps, feats);
+                Tensor input = Utils::generateInputTensor(masterLastIndex, masterKalmanHistory, masterKalmanCloses, masterEma20, masterRsi, masterAtr, masterAdx, masterBbPct, steps, feats);
 
                 if (input.depth > 0) {
-                    totalExtraBuy += extraBuyModels[i]->predict(input);
-                    totalExtraSell += extraSellModels[i]->predict(input);
-                    validExtra++;
+                    totalMasterBuy += masterBuyModels[i]->predict(input);
+                    totalMasterSell += masterSellModels[i]->predict(input);
+                    validMaster++;
                 }
             }
 
-            if (validExtra > 0) {
-                double exAvgBuy = totalExtraBuy / validExtra;
-                double exAvgSell = totalExtraSell / validExtra;
-                double exConf = std::max(exAvgBuy, exAvgSell) * 100.0;
+            if (validMaster > 0) {
+                double masterAvgBuy = totalMasterBuy / validMaster;
+                double masterAvgSell = totalMasterSell / validMaster;
+                double masterConf = std::max(masterAvgBuy, masterAvgSell) * 100.0;
 
-                if (exConf > 50) {
-                    if ((exAvgBuy - exAvgSell) > 0.01) {
-                        extraSignal = "BUY";
-                    } else if ((exAvgSell - exAvgBuy) > 0.01) {
-                        extraSignal = "SELL";
+                if (masterConf > 50) {
+                    if ((masterAvgBuy - masterAvgSell) > 0.01) {
+                        masterDecision = "BUY";
+                    } else if ((masterAvgSell - masterAvgBuy) > 0.01) {
+                        masterDecision = "SELL";
                     }
                 }
             }
@@ -211,8 +211,8 @@ int main() {
     double bestSellProb = 0.0;
     std::string finalSignal = "HOLD";
 
-    if (extraSignal != "HOLD") {
-        for (auto& pair : modelGroups) {
+    if (masterDecision != "HOLD") {
+        for (auto& pair : workerGroups) {
             int t = pair.first;
             auto& group = pair.second;
             
@@ -240,19 +240,19 @@ int main() {
                 double avgSell = totalSell / valid;
                 double conf = std::max(avgBuy, avgSell) * 100.0;
                 
-                std::string grpSignal = "HOLD";
+                std::string workerProposal = "HOLD";
                 if (conf > 50) {
-                    if ((avgBuy - avgSell) > 0.01) grpSignal = "BUY";
-                    else if ((avgSell - avgBuy) > 0.01) grpSignal = "SELL";
+                    if ((avgBuy - avgSell) > 0.01) workerProposal = "BUY";
+                    else if ((avgSell - avgBuy) > 0.01) workerProposal = "SELL";
                 }
 
-                if (grpSignal != "HOLD" && (extraSignal == "ANY" || grpSignal == extraSignal)) {
+                if (workerProposal != "HOLD" && (masterDecision == "ANY" || workerProposal == masterDecision)) {
                     if (conf > bestConf) {
                         bestConf = conf;
                         bestTarget = t;
                         bestBuyProb = avgBuy;
                         bestSellProb = avgSell;
-                        finalSignal = grpSignal;
+                        finalSignal = workerProposal;
                     }
                 }
             }
